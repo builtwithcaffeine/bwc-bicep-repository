@@ -1,2 +1,2 @@
-# bwc-bicep-template
-Azure Bicep - Deployment Template
+# BuiltWithCaffeine - Bicep Repository
+Public Repository for Bicep Deployment files 
