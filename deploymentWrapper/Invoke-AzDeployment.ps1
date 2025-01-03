@@ -181,5 +181,5 @@ if ($deploy) {
 
     $deployEndTime = Get-Date -Format 'HH:mm:ss'
     $timeDifference = New-TimeSpan -Start $deployStartTime -End $deployEndTime ; $deploymentDuration = "{0:hh\:mm\:ss}" -f $timeDifference
-    Write-Output `r "> Deployment [iac-bicep-$deployGuid] Started at $deployEndTime - Deployment Duration: $deploymentDuration"
+    Write-Output `r "> Deployment [iac-$deployGuid] Started at $deployEndTime - Deployment Duration: $deploymentDuration"
 }
