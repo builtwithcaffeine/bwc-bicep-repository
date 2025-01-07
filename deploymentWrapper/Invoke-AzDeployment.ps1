@@ -164,7 +164,7 @@ if ($deploy) {
     $deployStartTime = Get-Date -Format 'HH:mm:ss'
 
     # Deploy Bicep Template
-    $azDeployGuidLink = "`e]8;;https://portal.azure.com/#view/HubsExtension/DeploymentDetailsBlade/~/overview/id/%2Fsubscriptions%2F$subscriptionId%2Fproviders%2FMicrosoft.Resources%2Fdeployments%2Fiac-bicep-$deployGuid`e\iac-$deployGuid`e]8;;`e\"
+    $azDeployGuidLink = "`e]8;;https://portal.azure.com/#view/HubsExtension/DeploymentDetailsBlade/~/overview/id/%2Fsubscriptions%2F$subscriptionId%2Fproviders%2FMicrosoft.Resources%2Fdeployments%2Fiac-$deployGuid`e\iac-$deployGuid`e]8;;`e\"
     Write-Output `r "> Deployment [$azDeployGuidLink] Started at $deployStartTime"
 
     az deployment $targetScope create `
@@ -181,5 +181,5 @@ if ($deploy) {
 
     $deployEndTime = Get-Date -Format 'HH:mm:ss'
     $timeDifference = New-TimeSpan -Start $deployStartTime -End $deployEndTime ; $deploymentDuration = "{0:hh\:mm\:ss}" -f $timeDifference
-    Write-Output `r "> Deployment [iac-bicep-$deployGuid] Started at $deployEndTime - Deployment Duration: $deploymentDuration"
+    Write-Output `r "> Deployment [iac-$deployGuid] Started at $deployEndTime - Deployment Duration: $deploymentDuration"
 }
