@@ -23,35 +23,57 @@ param tags object = {
 }
 
 //
+// Virtual Network
+@description('Virtual Network Address Space(s)')
+param vnetAddressSpace array
+
+@description('The Subnet Address Space.')
+param subnetAddressPrefix string
+
+//
+// Entra Domain Services Parameters
+@description('Active Directory Domain Name')
+param domainName string
+
+@description('Entra Id Resource Name')
+param resourceName string
+
+@description('Domain Services Sku')
+@allowed([
+  'Standard'
+  'Premium'
+])
+param domainServicesSku string
+
+@description('Additional recipients for notifications.')
+param additionalRecipients array
+
+//
 // Bicep Deployment Variables
 
 var resourceGroupName = 'rg-domainservices-${environmentType}-${locationShortCode}'
 var logAnalyticsWorkspaceName = 'log-domainservices-${environmentType}-${locationShortCode}'
 var virtualNetworkName = 'vnet-domainservices-${environmentType}-${locationShortCode}'
 var virtualNetworkConfig = {
-  addressSpace: [
-    '192.168.0.0/24'
-  ]
+  addressSpace: vnetAddressSpace
   subnets: [
     {
       name: 'snet-domainservices'
-      addressPrefix: '192.168.0.0/24'
+      addressPrefix: subnetAddressPrefix
       networkSecurityGroupResourceId: createNetworkSecurityGroup.outputs.resourceId
     }
   ]
 }
 
 var domainServicesConfig = {
-  resourceName:'onmicrosoft.com'
-  domainName: 'onmicrosoft.com'
-  sku: 'Standard'
-  additionalRecipients: [
-    'alerts@builtwithcaffeine.cloud'
-  ]
+  resourceName: resourceName
+  domainName: domainName
+  sku: domainServicesSku
+  additionalRecipients: additionalRecipients
 }
 
 //
-// Azure Verified Modules - No Hard Coded Values below this line!
+// Azure Verified Modules
 
 module createResourceGroup 'br/public:avm/res/resources/resource-group:0.4.0' = {
   name: 'createResourceGroup'
@@ -145,7 +167,7 @@ module createVirtualNetwork 'br/public:avm/res/network/virtual-network:0.5.2' = 
   ]
 }
 
-module domainService 'br/public:avm/res/aad/domain-service:0.3.0' = {
+module createEntraDomainService 'br/public:avm/res/aad/domain-service:0.3.0' = {
   name: 'createDomainServiceDeployment'
   scope: resourceGroup(resourceGroupName)
   params: {

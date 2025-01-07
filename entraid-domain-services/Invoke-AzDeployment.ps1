@@ -28,7 +28,7 @@
     A switch to execute the infrastructure deployment.
 
 .EXAMPLE
-    .\Invoke-Deployment.ps1 -targetScope 'sub' -subscriptionId 'xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx' -environmentType 'dev' -location 'eastus' -deploy
+    .\Invoke-AzDeployment.ps1 -targetScope 'sub' -subscriptionId 'xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx' -environmentType 'dev' -location 'eastus' -deploy
 
 .NOTES
     Ensure that Azure CLI is installed and you are logged in before running this script.
@@ -45,15 +45,15 @@ param (
     [validateSet('dev', 'acc', 'prod')][string] $environmentType,
 
     [Parameter(Mandatory = $true, Position = 3, HelpMessage = "Azure Location is required")]
-    [validateSet("eastus", "eastus2", "westus", "westus2", "centralus", "northcentralus", "southcentralus", 
+    [validateSet("eastus", "eastus2", "westus", "westus2", "centralus", "northcentralus", "southcentralus",
         "westcentralus", "westus3", "eastus3", "northeurope", "westeurope", "swedencentral", "swedensouth",
-        "southeastasia", "eastasia", "japaneast", "japanwest", "australiaeast", "australiasoutheast", 
-        "australiacentral", "australiacentral2", "brazilsouth", "southindia", "centralindia", "westindia", 
-        "canadacentral", "canadaeast", "uksouth", "ukwest", "koreacentral", "koreasouth", "francecentral", 
+        "southeastasia", "eastasia", "japaneast", "japanwest", "australiaeast", "australiasoutheast",
+        "australiacentral", "australiacentral2", "brazilsouth", "southindia", "centralindia", "westindia",
+        "canadacentral", "canadaeast", "uksouth", "ukwest", "koreacentral", "koreasouth", "francecentral",
         "francesouth", "uaecentral", "uaenorth", "southafricanorth", "southafricawest", "southafricaeast",
         "norwayeast", "norwaywest", "germanynorth", "germanywestcentral", "switzerlandnorth", "switzerlandwest",
-        "polandcentral", "spaincentral", "qatarcentral", "chinanorth3", "chinaeast3", "indonesiacentral", 
-        "malaysiawest", "newzealandnorth", "taiwannorth", "israelcentral", "mexicocentral", "greececentral", 
+        "polandcentral", "spaincentral", "qatarcentral", "chinanorth3", "chinaeast3", "indonesiacentral",
+        "malaysiawest", "newzealandnorth", "taiwannorth", "israelcentral", "mexicocentral", "greececentral",
         "finlandcentral", "austriaeast", "belgiumcentral", "denmarkeast", "norwaysouth", "italynorth")]
     [string] $location,
 
@@ -160,14 +160,28 @@ Write-Output "Location.............: $location"
 Write-Output "Location Short Code..: $($locationShortCodes.$location)"
 Write-Output "Environment..........: $environmentType"
 
-# Create Domain Controller Services Enterprise Application
-$enterpriseAppId = '2565bd9d-da50-47d4-8b85-4c97f669dc36'
-$enterpriseAppObject = az ad app show --id $enterpriseAppId --output none
-Write-Output `r "Domain Controller Services created"
+# Create Enterprise Application - 'Domain Controller Services'
+Write-Output `r "Checking for 'Domain Controller Services' Enterprise Application..."
 
-# First, retrieve the object ID of the 'AAD DC Administrators' group.
+# Check if the Enterprise App exists
+$appId = "2565bd9d-da50-47d4-8b85-4c97f669dc36"
+$existingApp = az ad sp list --filter "appId eq '$appId'" --query "[].appId" -o tsv
+
+if (!($existingApp)) {
+    # If the app does not exist, create it
+    $newApp = az ad sp create --id $appId
+    if ($newApp) {
+        Write-Host "Enterprise App created successfully with App ID: $appId."
+    }
+    else {
+        Write-Host "Failed to create Enterprise App."
+    }
+}
+
+# Create Security Group - 'AAD DC Administrators'
+Write-Output `r "Checking for 'AAD DC Administrators' Security Group..."
 $GroupObject = az ad group show --group "AAD DC Administrators" --query "objectId" -o tsv
-if (-not $GroupObject) {
+if (!($GroupObject)) {
     az ad group create --display-name "AAD DC Administrators" --description "Delegated group to administer Microsoft Entra Domain Services" --mail-nickname "AADDCAdministrators" --output none
 }
 else {
@@ -185,6 +199,7 @@ if ($deploy) {
         --name iac-$deployGuid `
         --location $location `
         --template-file ./main.bicep `
+        --parameters ./params.bicepparam `
         --parameters `
         location=$location `
         locationShortCode=$($locationShortCodes.$location) `
