@@ -304,7 +304,7 @@ module createLinuxVirtualMachineInsightsPolicyRemediation 'modules/policy-insigh
     policyAssignmentId: createLinuxVirtualMachineInsightsPolicy.outputs.resourceId
     policyDefinitionReferenceId: 'associatedatacollectionrulelinux'
     resourceCount: 10
-    resourceDiscoveryMode: 'ExistingNonCompliant'
+    resourceDiscoveryMode: 'ReEvaluateCompliance'
     parallelDeployments: 10
     failureThresholdPercentage: '0.5'
     filtersLocations: []
@@ -347,7 +347,7 @@ module createLinuxVirtualMachineScaleSetInsightsPolicyRemediation 'modules/polic
     policyAssignmentId: createLinuxVirtualMachineScaleSetInsightsPolicy.outputs.resourceId
     policyDefinitionReferenceId: 'associatedatacollectionrulelinux'
     resourceCount: 10
-    resourceDiscoveryMode: 'ExistingNonCompliant'
+    resourceDiscoveryMode: 'ReEvaluateCompliance'
     parallelDeployments: 10
     failureThresholdPercentage: '0.5'
     filtersLocations: []

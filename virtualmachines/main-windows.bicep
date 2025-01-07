@@ -104,69 +104,66 @@ module createLogAnalyticsWorkspace 'br/public:avm/res/operational-insights/works
 }
 
 module createWindowsDataCollectionRule 'br/public:avm/res/insights/data-collection-rule:0.4.2' = {
-  name: 'create-windows-data-collection-rule'
   scope: resourceGroup(resourceGroupName)
+  name: 'create-windows-data-collection-rule'
   params: {
+    name: windowsDataCollectionRuleName
+    location: location
     dataCollectionRuleProperties: {
-      dataFlows: [
+    kind: 'Windows'
+    description: 'Data collection rule for VM Insights.'
+    dataFlows: [
+      {
+        streams: [
+          'Microsoft-InsightsMetrics'
+        ]
+        destinations: [
+          createLogAnalyticsWorkspace.outputs.name
+        ]
+      }
+      {
+        streams: [
+          'Microsoft-ServiceMap'
+        ]
+        destinations: [
+          createLogAnalyticsWorkspace.outputs.name
+        ]
+      }
+    ]
+    dataSources: {
+      performanceCounters: [
         {
           streams: [
             'Microsoft-InsightsMetrics'
           ]
-          destinations: [
-            createLogAnalyticsWorkspace.outputs.name
+          samplingFrequencyInSeconds: 60
+          counterSpecifiers: [
+            '\\VmInsights\\DetailedMetrics'
           ]
+          name: 'VMInsightsPerfCounters'
         }
+      ]
+      extensions: [
         {
           streams: [
             'Microsoft-ServiceMap'
           ]
-          destinations: [
-            createLogAnalyticsWorkspace.outputs.name
-          ]
+          extensionName: 'DependencyAgent'
+          extensionSettings: {}
+          name: 'DependencyAgentDataSource'
         }
       ]
-      dataSources: {
-        performanceCounters: [
-          {
-            streams: [
-              'Microsoft-InsightsMetrics'
-            ]
-            samplingFrequencyInSeconds: 60
-            counterSpecifiers: [
-              '\\VmInsights\\DetailedMetrics'
-            ]
-            name: 'VMInsightsPerfCounters'
-          }
-        ]
-        extensions: [
-          {
-            streams: [
-              'Microsoft-ServiceMap'
-            ]
-            extensionName: 'DependencyAgent'
-            extensionSettings: {}
-            name: 'DependencyAgentDataSource'
-          }
-        ]
-      }
-      description: 'Collect Operating System Diagnostic Data'
-      destinations: {
-        azureMonitorMetrics: {
-          name: 'azureMonitorMetrics-default'
-        }
-        logAnalytics: [
-          {
-            name: createLogAnalyticsWorkspace.outputs.name
-            workspaceId: createLogAnalyticsWorkspace.outputs.logAnalyticsWorkspaceId
-            workspaceResourceId: createLogAnalyticsWorkspace.outputs.resourceId
-          }
-        ]
-      }
-      kind: 'Windows'
     }
-    name: windowsDataCollectionRuleName
-    location: location
+    destinations: {
+      logAnalytics: [
+        {
+          workspaceResourceId: createLogAnalyticsWorkspace.outputs.resourceId
+          workspaceId: createLogAnalyticsWorkspace.outputs.logAnalyticsWorkspaceId
+          name: createLogAnalyticsWorkspace.outputs.name
+        }
+      ]
+    }
+  }
   }
   dependsOn: [
     createLogAnalyticsWorkspace
@@ -181,7 +178,7 @@ module createNetworkSecurityGroup 'br/public:avm/res/network/network-security-gr
     location: location
     securityRules: [
       {
-        name: 'ALLOW_SSH_INBOUND_TCP'
+        name: 'ALLOW_RDP_INBOUND_TCP'
         properties: {
           priority: 100
           access: 'Allow'
@@ -304,7 +301,7 @@ module createWindowsVirtualMachineInsightsPolicyRemediation 'modules/policy-insi
     policyAssignmentId: createWindowsVirtualMachineInsightsPolicy.outputs.resourceId
     policyDefinitionReferenceId: 'associatedatacollectionrulewindows'
     resourceCount: 10
-    resourceDiscoveryMode: 'ExistingNonCompliant'
+    resourceDiscoveryMode: 'ReEvaluateCompliance'
     parallelDeployments: 10
     failureThresholdPercentage: '0.5'
     filtersLocations: []
@@ -347,7 +344,7 @@ module createWindowsVirtualMachineScaleSetInsightsPolicyRemediation 'modules/pol
     policyAssignmentId: createWindowsVirtualMachineScaleSetInsightsPolicy.outputs.resourceId
     policyDefinitionReferenceId: 'associatedatacollectionrulewindows'
     resourceCount: 10
-    resourceDiscoveryMode: 'ExistingNonCompliant'
+    resourceDiscoveryMode: 'ReEvaluateCompliance'
     parallelDeployments: 10
     failureThresholdPercentage: '0.5'
     filtersLocations: []
