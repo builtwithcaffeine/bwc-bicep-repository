@@ -24,6 +24,9 @@ param vmUserPassword string
 @description('The Resource Group Name')
 param resourceGroupName string = 'rg-learning-linux-${locationShortCode}'
 
+@description('The User Assigned Managed Identity Name')
+param userManagedIdentityName string = 'id-azure-policy-vminsights-${locationShortCode}'
+
 @description('The Network Security Group Name')
 param networkSecurityGroupName string = 'nsg-learning-linux-${locationShortCode}'
 
@@ -39,12 +42,52 @@ param virtualNetworkName string = 'vnet-learning-linux-${locationShortCode}'
 @description('The Subnet Name')
 param subnetName string = 'snet-learning-linux-${locationShortCode}'
 
+@description('Azure Policy Name')
+param linuxVirtualMachineInsightsPolicyName string = 'Configure Virtual Machine Insights for Linux'
+
+@description('The Azure Policy Definition Id')
+param linuxVirtualMachineInsightsPolicyDefinitionId string = '/providers/Microsoft.Authorization/policyDefinitions/58e891b9-ce13-4ac3-86e4-ac3e1f20cb07'
+
+@description('Azure Policy Name')
+param linuxVirtualMachineScaleSetInsightsPolicyName string = 'Configure Virtual Machine Scale Set Insights for Linux'
+
+@description('The Azure Policy Definition Id')
+param linuxVirtualMachineScaleSetInsightsPolicyDefinitionId string = '/providers/Microsoft.Authorization/policyDefinitions/050a90d5-7cce-483f-8f6c-0df462036dda'
+
+//
+// Azure Verified Modules
+
 module createResourceGroup 'br/public:avm/res/resources/resource-group:0.4.0' = {
   name: 'createResourceGroup'
   params: {
     name: resourceGroupName
     location: location
   }
+}
+
+module createUserManagedIdentity 'br/public:avm/res/managed-identity/user-assigned-identity:0.4.0' = {
+  name: 'createUserManagedIdentity'
+  scope: resourceGroup(resourceGroupName)
+  params: {
+    name: userManagedIdentityName
+    location: location
+  }
+  dependsOn: [
+    createResourceGroup
+  ]
+}
+
+module createAzureRoleAssignment 'modules/authorization/role-assignment/subscription/main.bicep' = {
+  name: 'create-azure-role-assignment'
+  scope: subscription()
+  params: {
+    principalType: 'ServicePrincipal'
+    roleDefinitionIdOrName: '/providers/Microsoft.Authorization/roleDefinitions/9980e02c-c2be-4d73-94e8-173b1dc7cf3c' // Virtual Machine Contributor
+    principalId: createUserManagedIdentity.outputs.principalId
+  }
+  dependsOn: [
+    createUserManagedIdentity
+  ]
 }
 
 module createLogAnalyticsWorkspace 'br/public:avm/res/operational-insights/workspace:0.9.0' = {
@@ -62,147 +105,52 @@ module createLogAnalyticsWorkspace 'br/public:avm/res/operational-insights/works
 
 module createLinuxDataCollectionRule 'br/public:avm/res/insights/data-collection-rule:0.4.2' = {
   name: 'create-linux-data-collection-rule'
-  scope: resourceGroup(resourceGroupName)
+  scope: resourceGroup(resourceGroupName) 
   params: {
-    // Required parameters
     dataCollectionRuleProperties: {
       dataFlows: [
         {
-          destinations: [
-            createLogAnalyticsWorkspace.outputs.name
-          ]
           streams: [
             'Microsoft-InsightsMetrics'
           ]
-        }
-        {
           destinations: [
             createLogAnalyticsWorkspace.outputs.name
           ]
+        }
+        {
           streams: [
-            'Microsoft-Syslog'
+            'Microsoft-ServiceMap'
+          ]
+          destinations: [
+            createLogAnalyticsWorkspace.outputs.name
           ]
         }
       ]
       dataSources: {
         performanceCounters: [
           {
-            counterSpecifiers: [
-              'Logical Disk(*)\\% Free Inodes'
-              'Logical Disk(*)\\% Free Space'
-              'Logical Disk(*)\\% Used Inodes'
-              'Logical Disk(*)\\% Used Space'
-              'Logical Disk(*)\\Disk Read Bytes/sec'
-              'Logical Disk(*)\\Disk Reads/sec'
-              'Logical Disk(*)\\Disk Transfers/sec'
-              'Logical Disk(*)\\Disk Write Bytes/sec'
-              'Logical Disk(*)\\Disk Writes/sec'
-              'Logical Disk(*)\\Free Megabytes'
-              'Logical Disk(*)\\Logical Disk Bytes/sec'
-              'Memory(*)\\% Available Memory'
-              'Memory(*)\\% Available Swap Space'
-              'Memory(*)\\% Used Memory'
-              'Memory(*)\\% Used Swap Space'
-              'Memory(*)\\Available MBytes Memory'
-              'Memory(*)\\Available MBytes Swap'
-              'Memory(*)\\Page Reads/sec'
-              'Memory(*)\\Page Writes/sec'
-              'Memory(*)\\Pages/sec'
-              'Memory(*)\\Used MBytes Swap Space'
-              'Memory(*)\\Used Memory MBytes'
-              'Network(*)\\Total Bytes'
-              'Network(*)\\Total Bytes Received'
-              'Network(*)\\Total Bytes Transmitted'
-              'Network(*)\\Total Collisions'
-              'Network(*)\\Total Packets Received'
-              'Network(*)\\Total Packets Transmitted'
-              'Network(*)\\Total Rx Errors'
-              'Network(*)\\Total Tx Errors'
-              'Processor(*)\\% DPC Time'
-              'Processor(*)\\% Idle Time'
-              'Processor(*)\\% Interrupt Time'
-              'Processor(*)\\% IO Wait Time'
-              'Processor(*)\\% Nice Time'
-              'Processor(*)\\% Privileged Time'
-              'Processor(*)\\% Processor Time'
-              'Processor(*)\\% User Time'
-            ]
-            name: 'perfCounterDataSource60'
-            samplingFrequencyInSeconds: 60
             streams: [
               'Microsoft-InsightsMetrics'
             ]
+            samplingFrequencyInSeconds: 60
+            counterSpecifiers: [
+              '\\VmInsights\\DetailedMetrics'
+            ]
+            name: 'VMInsightsPerfCounters'
           }
         ]
-        syslog: [
+        extensions: [
           {
-            facilityNames: [
-              'auth'
-              'authpriv'
-            ]
-            logLevels: [
-              'Alert'
-              'Critical'
-              'Debug'
-              'Emergency'
-              'Error'
-              'Info'
-              'Notice'
-              'Warning'
-            ]
-            name: 'sysLogsDataSource-debugLevel'
             streams: [
-              'Microsoft-Syslog'
+              'Microsoft-ServiceMap'
             ]
-          }
-          {
-            facilityNames: [
-              'cron'
-              'daemon'
-              'kern'
-              'local0'
-              'mark'
-            ]
-            logLevels: [
-              'Alert'
-              'Critical'
-              'Emergency'
-              'Error'
-              'Warning'
-            ]
-            name: 'sysLogsDataSource-warningLevel'
-            streams: [
-              'Microsoft-Syslog'
-            ]
-          }
-          {
-            facilityNames: [
-              'local1'
-              'local2'
-              'local3'
-              'local4'
-              'local5'
-              'local6'
-              'local7'
-              'lpr'
-              'mail'
-              'news'
-              'syslog'
-            ]
-            logLevels: [
-              'Alert'
-              'Critical'
-              'Emergency'
-              'Error'
-            ]
-            name: 'sysLogsDataSource-errLevel'
-            streams: [
-              'Microsoft-Syslog'
-            ]
+            extensionName: 'DependencyAgent'
+            extensionSettings: {}
+            name: 'DependencyAgentDataSource'
           }
         ]
       }
-      description: 'Collecting Linux-specific performance counters and Linux Syslog'
+      description: 'Collect Operating System Diagnostic Data'
       destinations: {
         azureMonitorMetrics: {
           name: 'azureMonitorMetrics-default'
@@ -220,6 +168,9 @@ module createLinuxDataCollectionRule 'br/public:avm/res/insights/data-collection
     name: linuxDataCollectionRuleName
     location: location
   }
+  dependsOn: [
+    createLogAnalyticsWorkspace
+  ]
 }
 
 module createNetworkSecurityGroup 'br/public:avm/res/network/network-security-group:0.5.0' = {
@@ -317,5 +268,91 @@ module createVirtualMachine 'br/public:avm/res/compute/virtual-machine:0.8.0' = 
   }
   dependsOn: [
     createVirtualNetwork
+  ]
+}
+
+module createLinuxVirtualMachineInsightsPolicy 'modules/authorization/policy-assignment/subscription/main.bicep' = {
+  name: 'create-linux-vm-data-collection-configuration'
+  scope: subscription()
+  params: {
+    name: 'virtual-machine-insights-linux'
+    subscriptionId: subscription().subscriptionId
+    displayName: linuxVirtualMachineInsightsPolicyName
+    description: 'Automatically configure Virtual Machine Insights for linux virtual machines'
+    policyDefinitionId: linuxVirtualMachineInsightsPolicyDefinitionId
+    parameters: {
+      DcrResourceId: {
+        value: createLinuxDataCollectionRule.outputs.resourceId
+      }
+    }
+    identity: 'UserAssigned'
+    userAssignedIdentityId: '/subscriptions/${subscription().subscriptionId}/resourceGroups/${resourceGroupName}/providers/Microsoft.ManagedIdentity/userAssignedIdentities/${createUserManagedIdentity.outputs.name}'
+    location: location
+  }
+  dependsOn: [
+    createUserManagedIdentity
+    createLinuxDataCollectionRule
+  ]
+}
+
+module createLinuxVirtualMachineInsightsPolicyRemediation 'modules/policy-insights/remeditation/subscription/main.bicep' = {
+  name: 'create-linux-vm-data-collection-configuration-remediation'
+  scope: subscription()
+  params: {
+    name: 'virtual-machine-insights-linux-remediation'
+    location: location
+    policyAssignmentId: createLinuxVirtualMachineInsightsPolicy.outputs.resourceId
+    policyDefinitionReferenceId: 'associatedatacollectionrulelinux'
+    resourceCount: 10
+    resourceDiscoveryMode: 'ExistingNonCompliant'
+    parallelDeployments: 10
+    failureThresholdPercentage: '0.5'
+    filtersLocations: []
+  }
+  dependsOn: [
+    createLinuxVirtualMachineInsightsPolicy
+  ]
+}
+
+module createLinuxVirtualMachineScaleSetInsightsPolicy 'modules/authorization/policy-assignment/subscription/main.bicep' = {
+  name: 'create-linux-vmss-data-collection-configuration'
+  scope: subscription()
+  params: {
+    name: 'virtual-machine-scale-set-insights-linux'
+    subscriptionId: subscription().subscriptionId
+    displayName: linuxVirtualMachineScaleSetInsightsPolicyName
+    description: 'Automatically configure Virtual Machine Scale Set Insights for linux virtual machines'
+    policyDefinitionId: linuxVirtualMachineScaleSetInsightsPolicyDefinitionId
+    parameters: {
+      DcrResourceId: {
+        value: createLinuxDataCollectionRule.outputs.resourceId
+      }
+    }
+    identity: 'UserAssigned'
+    userAssignedIdentityId: '/subscriptions/${subscription().subscriptionId}/resourceGroups/${resourceGroupName}/providers/Microsoft.ManagedIdentity/userAssignedIdentities/${createUserManagedIdentity.outputs.name}'
+    location: location
+  }
+  dependsOn: [
+    createUserManagedIdentity
+    createLinuxDataCollectionRule
+  ]
+}
+
+module createLinuxVirtualMachineScaleSetInsightsPolicyRemediation 'modules/policy-insights/remeditation/subscription/main.bicep' = {
+  name: 'create-linux-vmms-data-collection-configuration-remediation'
+  scope: subscription()
+  params: {
+    name: 'virtual-machine-scale-set-insights-linux-remediation'
+    location: location
+    policyAssignmentId: createLinuxVirtualMachineScaleSetInsightsPolicy.outputs.resourceId
+    policyDefinitionReferenceId: 'associatedatacollectionrulelinux'
+    resourceCount: 10
+    resourceDiscoveryMode: 'ExistingNonCompliant'
+    parallelDeployments: 10
+    failureThresholdPercentage: '0.5'
+    filtersLocations: []
+  }
+  dependsOn: [
+    createLinuxVirtualMachineScaleSetInsightsPolicy
   ]
 }

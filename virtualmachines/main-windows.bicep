@@ -42,6 +42,18 @@ param virtualNetworkName string = 'vnet-learning-windows-${locationShortCode}'
 @description('The Subnet Name')
 param subnetName string = 'snet-learning-windows-${locationShortCode}'
 
+@description('Azure Policy Name')
+param windowsVirtualMachineInsightsPolicyName string = 'Configure Virtual Machine Insights for Windows'
+
+@description('The Azure Policy Definition Id')
+param windowsVirtualMachineInsightsPolicyDefinitionId string = '/providers/Microsoft.Authorization/policyDefinitions/244efd75-0d92-453c-b9a3-7d73ca36ed52'
+
+@description('Azure Policy Name')
+param windowsVirtualMachineScaleSetInsightsPolicyName string = 'Configure Virtual Machine Scale Set Insights for Windows'
+
+@description('The Azure Policy Definition Id')
+param windowsVirtualMachineScaleSetInsightsPolicyDefinitionId string = '/providers/Microsoft.Authorization/policyDefinitions/0a3b9bf4-d30e-424a-af6b-9a93f6f78792'
+
 //
 // Azure Verified Modules
 
@@ -65,6 +77,19 @@ module createUserManagedIdentity 'br/public:avm/res/managed-identity/user-assign
   ]
 }
 
+module createAzureRoleAssignment 'modules/authorization/role-assignment/subscription/main.bicep' = {
+  name: 'create-azure-role-assignment'
+  scope: subscription()
+  params: {
+    principalType: 'ServicePrincipal'
+    roleDefinitionIdOrName: '/providers/Microsoft.Authorization/roleDefinitions/9980e02c-c2be-4d73-94e8-173b1dc7cf3c' // Virtual Machine Contributor
+    principalId: createUserManagedIdentity.outputs.principalId
+  }
+  dependsOn: [
+    createUserManagedIdentity
+  ]
+}
+
 module createLogAnalyticsWorkspace 'br/public:avm/res/operational-insights/workspace:0.9.0' = {
   name: 'create-log-analytics-workspace'
   scope: resourceGroup(resourceGroupName)
@@ -82,51 +107,50 @@ module createWindowsDataCollectionRule 'br/public:avm/res/insights/data-collecti
   name: 'create-windows-data-collection-rule'
   scope: resourceGroup(resourceGroupName)
   params: {
-    // Required parameters
     dataCollectionRuleProperties: {
-            dataFlows:[
-              {
-                streams: [
-                  'Microsoft-InsightsMetrics'
-                ]
-                destinations: [
-                  createLogAnalyticsWorkspace.outputs.name
-                ]
-              }
-              {
-                streams: [
-                  'Microsoft-ServiceMap'
-                ]
-                destinations: [
-                  createLogAnalyticsWorkspace.outputs.name
-                ]
-              }
+      dataFlows: [
+        {
+          streams: [
+            'Microsoft-InsightsMetrics'
+          ]
+          destinations: [
+            createLogAnalyticsWorkspace.outputs.name
+          ]
+        }
+        {
+          streams: [
+            'Microsoft-ServiceMap'
+          ]
+          destinations: [
+            createLogAnalyticsWorkspace.outputs.name
+          ]
+        }
+      ]
+      dataSources: {
+        performanceCounters: [
+          {
+            streams: [
+              'Microsoft-InsightsMetrics'
             ]
-            dataSources: {
-              performanceCounters: [
-                {
-                  streams: [
-                    'Microsoft-InsightsMetrics'
-                  ]
-                  samplingFrequencyInSeconds: 60
-                  counterSpecifiers: [
-                    '\\VmInsights\\DetailedMetrics'
-                  ]
-                  name: 'VMInsightsPerfCounters'
-                }
-              ]
-              extensions: [
-                {
-                  streams: [
-                    'Microsoft-ServiceMap'
-                  ]
-                  extensionName: 'DependencyAgent'
-                  extensionSettings: {}
-                  name: 'DependencyAgentDataSource'
-                }
-              ]
-            }
-      description: 'Collecting Windows-specific performance counters and Windows Event Logs'
+            samplingFrequencyInSeconds: 60
+            counterSpecifiers: [
+              '\\VmInsights\\DetailedMetrics'
+            ]
+            name: 'VMInsightsPerfCounters'
+          }
+        ]
+        extensions: [
+          {
+            streams: [
+              'Microsoft-ServiceMap'
+            ]
+            extensionName: 'DependencyAgent'
+            extensionSettings: {}
+            name: 'DependencyAgentDataSource'
+          }
+        ]
+      }
+      description: 'Collect Operating System Diagnostic Data'
       destinations: {
         azureMonitorMetrics: {
           name: 'azureMonitorMetrics-default'
@@ -143,11 +167,6 @@ module createWindowsDataCollectionRule 'br/public:avm/res/insights/data-collecti
     }
     name: windowsDataCollectionRuleName
     location: location
-    tags: {
-      'hidden-title': 'This is visible in the resource name'
-      kind: 'Windows'
-      resourceType: 'Data Collection Rules'
-    }
   }
   dependsOn: [
     createLogAnalyticsWorkspace
@@ -252,3 +271,88 @@ module createVirtualMachine 'br/public:avm/res/compute/virtual-machine:0.8.0' = 
   ]
 }
 
+module createWindowsVirtualMachineInsightsPolicy 'modules/authorization/policy-assignment/subscription/main.bicep' = {
+  name: 'create-windows-vm-data-collection-configuration'
+  scope: subscription()
+  params: {
+    name: 'virtual-machine-insights-windows'
+    subscriptionId: subscription().subscriptionId
+    displayName: windowsVirtualMachineInsightsPolicyName
+    description: 'Automatically configure Virtual Machine Insights for Windows virtual machines'
+    policyDefinitionId: windowsVirtualMachineInsightsPolicyDefinitionId
+    parameters: {
+      DcrResourceId: {
+        value: createWindowsDataCollectionRule.outputs.resourceId
+      }
+    }
+    identity: 'UserAssigned'
+    userAssignedIdentityId: '/subscriptions/${subscription().subscriptionId}/resourceGroups/${resourceGroupName}/providers/Microsoft.ManagedIdentity/userAssignedIdentities/${createUserManagedIdentity.outputs.name}'
+    location: location
+  }
+  dependsOn: [
+    createUserManagedIdentity
+    createWindowsDataCollectionRule
+  ]
+}
+
+module createWindowsVirtualMachineInsightsPolicyRemediation 'modules/policy-insights/remeditation/subscription/main.bicep' = {
+  name: 'create-windows-vm-data-collection-configuration-remediation'
+  scope: subscription()
+  params: {
+    name: 'virtual-machine-insights-windows-remediation'
+    location: location
+    policyAssignmentId: createWindowsVirtualMachineInsightsPolicy.outputs.resourceId
+    policyDefinitionReferenceId: 'associatedatacollectionrulewindows'
+    resourceCount: 10
+    resourceDiscoveryMode: 'ExistingNonCompliant'
+    parallelDeployments: 10
+    failureThresholdPercentage: '0.5'
+    filtersLocations: []
+  }
+  dependsOn: [
+    createWindowsVirtualMachineInsightsPolicy
+  ]
+}
+
+module createWindowsVirtualMachineScaleSetInsightsPolicy 'modules/authorization/policy-assignment/subscription/main.bicep' = {
+  name: 'create-windows-vmss-data-collection-configuration'
+  scope: subscription()
+  params: {
+    name: 'virtual-machine-scale-set-insights-windows'
+    subscriptionId: subscription().subscriptionId
+    displayName: windowsVirtualMachineScaleSetInsightsPolicyName
+    description: 'Automatically configure Virtual Machine Scale Set Insights for Windows virtual machines'
+    policyDefinitionId: windowsVirtualMachineScaleSetInsightsPolicyDefinitionId
+    parameters: {
+      DcrResourceId: {
+        value: createWindowsDataCollectionRule.outputs.resourceId
+      }
+    }
+    identity: 'UserAssigned'
+    userAssignedIdentityId: '/subscriptions/${subscription().subscriptionId}/resourceGroups/${resourceGroupName}/providers/Microsoft.ManagedIdentity/userAssignedIdentities/${createUserManagedIdentity.outputs.name}'
+    location: location
+  }
+  dependsOn: [
+    createUserManagedIdentity
+    createWindowsDataCollectionRule
+  ]
+}
+
+module createWindowsVirtualMachineScaleSetInsightsPolicyRemediation 'modules/policy-insights/remeditation/subscription/main.bicep' = {
+  name: 'create-windows-vmss-data-collection-configuration-remediation'
+  scope: subscription()
+  params: {
+    name: 'virtual-machine-scale-set-insights-windows-remediation'
+    location: location
+    policyAssignmentId: createWindowsVirtualMachineScaleSetInsightsPolicy.outputs.resourceId
+    policyDefinitionReferenceId: 'associatedatacollectionrulewindows'
+    resourceCount: 10
+    resourceDiscoveryMode: 'ExistingNonCompliant'
+    parallelDeployments: 10
+    failureThresholdPercentage: '0.5'
+    filtersLocations: []
+  }
+  dependsOn: [
+    createWindowsVirtualMachineScaleSetInsightsPolicy
+  ]
+}
