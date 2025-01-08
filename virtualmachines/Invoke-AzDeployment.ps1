@@ -66,7 +66,9 @@ param (
     )][string]$location,
 
     [Parameter(Mandatory = $true, Position = 3, HelpMessage = "Choose between 'Windows' or 'Linux'")]
-    [ValidateSet('.\main-windows.bicep', '.\main-linux.bicep')]
+    [ValidateSet('.\main-windows-machineOnly.bicep', '.\main-windows-vminsights.bicep',
+                 '.\main-linux-machineOnly.bicep', '.\main-linux-vminsights.bicep'
+    )]
     [string] $bicepFile,
 
     [Parameter(Mandatory = $false, Position = 4, HelpMessage = "Enabled Bicep Deployment")]
@@ -215,7 +217,10 @@ $vmUserPassword = New-RandomPassword -length 16
 # Check Azure Bicep Version
 Get-BicepVersion
 
-# Log into Azure
+# Azure CLI Authentication
+az login --output none --only-show-errors
+
+# Configure Azure Cli User Experience
 Write-Output "> Logging into Azure for $subscriptionId"
 az config set core.login_experience_v2=off --only-show-errors
 
@@ -223,6 +228,7 @@ Write-Output "> Setting subscription to $subscriptionId"
 az account set --subscription $subscriptionId
 
 Write-Output `r "Pre Flight Variable Validation"
+Write-Output "Bicep File............: $bicepFile"
 Write-Output "Deployment Guid......: $deployGuid"
 Write-Output "Location.............: $location"
 Write-Output "Location Shortcode...: $shortcode"
@@ -235,7 +241,7 @@ if ($deploy) {
     Write-Output `r "> Deployment [$azDeployGuidLink] Started at $deployStartTime"
 
     az deployment sub create `
-        --name iac-bicep-$deployGuid `
+        --name iac-$deployGuid `
         --location $location `
         --template-file $bicepFile `
         --parameters `
@@ -246,8 +252,12 @@ if ($deploy) {
             vmUserPassword=$vmUserPassword `
         --confirm-with-what-if `
         --output none
-}
 
     $deployEndTime = Get-Date -Format 'HH:mm:ss'
     $timeDifference = New-TimeSpan -Start $deployStartTime -End $deployEndTime ; $deploymentDuration = "{0:hh\:mm\:ss}" -f $timeDifference
-    Write-Output `r "> Deployment [iac-bicep-$deployGuid] Started at $deployEndTime - Deployment Duration: $deploymentDuration"
+    Write-Output `r "> Deployment [iac-$deployGuid] Started at $deployEndTime - Deployment Duration: $deploymentDuration"
+
+    Write-Output `r "Credentials"
+    Write-Output "VM Username: $vmUserName"
+    Write-Output "VM Password: $vmUserPassword"
+}

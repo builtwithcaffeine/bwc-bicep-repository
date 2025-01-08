@@ -12,7 +12,7 @@ param locationShortCode string
 param publicIp string
 
 @description('The name of the virtual machine')
-param vmHostName string = 'vm-linux-01'
+param vmHostName string = 'vm-windows-01'
 
 @description('The Local User Account Name')
 param vmUserName string
@@ -22,37 +22,32 @@ param vmUserName string
 param vmUserPassword string
 
 @description('The Resource Group Name')
-param resourceGroupName string = 'rg-learning-penguin-${locationShortCode}'
+param resourceGroupName string = 'rg-learning-windows-${locationShortCode}'
 
 @description('The User Assigned Managed Identity Name')
-param userManagedIdentityName string = 'id-azure-policy-vminsights-${locationShortCode}'
+param userManagedIdentityName string = 'id-azure-policy-vminsights-win-${locationShortCode}'
 
 @description('The Network Security Group Name')
-param networkSecurityGroupName string = 'nsg-learning-linux-${locationShortCode}'
+param networkSecurityGroupName string = 'nsg-learning-windows-${locationShortCode}'
 
 @description('The Log Analytics Workspace Name')
-param logAnalyticsWorkspaceName string = 'law-learning-linux-${locationShortCode}'
+param logAnalyticsWorkspaceName string = 'law-learning-windows-${locationShortCode}'
 
 @description('The Data Collection Rule Name')
-param linuxDataCollectionRuleName string = 'MSVMI-dcr-linux'
+param windowsDataCollectionRuleName string = 'MSVMI-vminsights-windows'
 
 @description('The Virtual Network Name')
-param virtualNetworkName string = 'vnet-learning-linux-${locationShortCode}'
+param virtualNetworkName string = 'vnet-learning-windows-${locationShortCode}'
 
 @description('The Subnet Name')
-param subnetName string = 'snet-learning-linux-${locationShortCode}'
+param subnetName string = 'snet-learning-windows-${locationShortCode}'
 
 @description('Azure Policy Name')
-param linuxVirtualMachineInsightsPolicyName string = 'Configure Virtual Machine Insights for Linux'
+param windowsVirtualMachineInsightsPolicyName string = 'Configure Virtual Machine Insights for Windows'
 
 @description('The Azure Policy Definition Id')
-param linuxVirtualMachineInsightsPolicyDefinitionId string = '/providers/Microsoft.Authorization/policyDefinitions/58e891b9-ce13-4ac3-86e4-ac3e1f20cb07'
+param windowsVirtualMachineInsightsPolicyDefinitionId string = '/providers/Microsoft.Authorization/policyDefinitions/244efd75-0d92-453c-b9a3-7d73ca36ed52'
 
-@description('Azure Policy Name')
-param linuxVirtualMachineScaleSetInsightsPolicyName string = 'Configure Virtual Machine Scale Set Insights for Linux'
-
-@description('The Azure Policy Definition Id')
-param linuxVirtualMachineScaleSetInsightsPolicyDefinitionId string = '/providers/Microsoft.Authorization/policyDefinitions/050a90d5-7cce-483f-8f6c-0df462036dda'
 
 //
 // Azure Verified Modules
@@ -77,16 +72,31 @@ module createUserManagedIdentity 'br/public:avm/res/managed-identity/user-assign
   ]
 }
 
-module createAzureRoleAssignment 'modules/authorization/role-assignment/subscription/main.bicep' = {
-  name: 'create-azure-role-assignment'
-  scope: subscription()
+module createResourceRoleAssignmentLogAnalyticsContributor 'br/public:avm/ptn/authorization/resource-role-assignment:0.1.1' = {
+  name: 'create-resource-role-assignment-law-contributor'
+  scope: resourceGroup(resourceGroupName)
   params: {
-    principalType: 'ServicePrincipal'
-    roleDefinitionIdOrName: '/providers/Microsoft.Authorization/roleDefinitions/9980e02c-c2be-4d73-94e8-173b1dc7cf3c' // Virtual Machine Contributor
+    resourceId: createLogAnalyticsWorkspace.outputs.resourceId
     principalId: createUserManagedIdentity.outputs.principalId
+    roleDefinitionId: '/providers/Microsoft.Authorization/roleDefinitions/92aaf0da-9dab-42b6-94a3-d43ce8d16293' // Log Analytics Contributor
   }
   dependsOn: [
     createUserManagedIdentity
+    createLogAnalyticsWorkspace
+  ]
+}
+
+module createResourceRoleAssignmentMonitoringContributor 'br/public:avm/ptn/authorization/resource-role-assignment:0.1.1' = {
+  name: 'create-resource-role-assignment-monitoring-contributor'
+  scope: resourceGroup(resourceGroupName)
+  params: {
+    resourceId: createLogAnalyticsWorkspace.outputs.resourceId
+    principalId: createUserManagedIdentity.outputs.principalId
+    roleDefinitionId: '/providers/Microsoft.Authorization/roleDefinitions/749f88d5-cbae-40b8-bcfc-e573ddc772fa' // Monitoring Contributor
+  }
+    dependsOn: [
+    createUserManagedIdentity
+    createLogAnalyticsWorkspace
   ]
 }
 
@@ -103,14 +113,14 @@ module createLogAnalyticsWorkspace 'br/public:avm/res/operational-insights/works
   ]
 }
 
-module createLinuxDataCollectionRule 'br/public:avm/res/insights/data-collection-rule:0.4.2' = {
-  name: 'create-linux-data-collection-rule'
+module createWindowsDataCollectionRule 'br/public:avm/res/insights/data-collection-rule:0.4.2' = {
   scope: resourceGroup(resourceGroupName)
+  name: 'create-windows-data-collection-rule'
   params: {
-    name: linuxDataCollectionRuleName
+    name: windowsDataCollectionRuleName
     location: location
     dataCollectionRuleProperties: {
-      kind: 'Linux'
+      kind: 'Windows'
       description: 'Data collection rule for VM Insights.'
       dataFlows: [
         {
@@ -178,7 +188,7 @@ module createNetworkSecurityGroup 'br/public:avm/res/network/network-security-gr
     location: location
     securityRules: [
       {
-        name: 'ALLOW_SSH_INBOUND_TCP'
+        name: 'ALLOW_RDP_INBOUND_TCP'
         properties: {
           priority: 100
           access: 'Allow'
@@ -187,7 +197,7 @@ module createNetworkSecurityGroup 'br/public:avm/res/network/network-security-gr
           sourceAddressPrefix: publicIp
           sourcePortRange: '*'
           destinationAddressPrefix: '*'
-          destinationPortRange: '22'
+          destinationPortRange: '3389'
         }
       }
     ]
@@ -227,7 +237,7 @@ module createVirtualMachine 'br/public:avm/res/compute/virtual-machine:0.8.0' = 
     adminUsername: vmUserName
     adminPassword: vmUserPassword
     location: location
-    osType: 'Linux'
+    osType: 'Windows'
     vmSize: 'Standard_B2ms'
     zone: 0
     bootDiagnostics: true
@@ -235,9 +245,9 @@ module createVirtualMachine 'br/public:avm/res/compute/virtual-machine:0.8.0' = 
     vTpmEnabled: true
     securityType: 'TrustedLaunch'
     imageReference: {
-      publisher: 'Canonical'
-      offer: 'ubuntu-24_04-lts'
-      sku: 'server'
+      publisher: 'MicrosoftWindowsServer'
+      offer: 'WindowsServer'
+      sku: '2022-datacenter-azure-edition-hotpatch'
       version: 'latest'
     }
     nicConfigurations: [
@@ -262,94 +272,69 @@ module createVirtualMachine 'br/public:avm/res/compute/virtual-machine:0.8.0' = 
         storageAccountType: 'Premium_LRS'
       }
     }
+    extensionMonitoringAgentConfig: {
+      dataCollectionRuleAssociations: [
+        {
+          dataCollectionRuleResourceId: createWindowsDataCollectionRule.outputs.resourceId
+          name: 'SendMetricsToLAW'
+        }
+      ]
+      enabled: true
+      enableAutomaticUpgrade: true
+    }
   }
   dependsOn: [
     createVirtualNetwork
   ]
 }
 
-module createLinuxVirtualMachineInsightsPolicy 'modules/authorization/policy-assignment/subscription/main.bicep' = {
-  name: 'create-linux-vm-data-collection-configuration'
-  scope: subscription()
-  params: {
-    name: 'virtual-machine-insights-linux'
-    subscriptionId: subscription().subscriptionId
-    displayName: linuxVirtualMachineInsightsPolicyName
-    description: 'Automatically configure Virtual Machine Insights for linux virtual machines'
-    policyDefinitionId: linuxVirtualMachineInsightsPolicyDefinitionId
-    parameters: {
-      DcrResourceId: {
-        value: createLinuxDataCollectionRule.outputs.resourceId
-      }
-    }
-    identity: 'UserAssigned'
-    userAssignedIdentityId: '/subscriptions/${subscription().subscriptionId}/resourceGroups/${resourceGroupName}/providers/Microsoft.ManagedIdentity/userAssignedIdentities/${createUserManagedIdentity.outputs.name}'
-    location: location
-  }
-  dependsOn: [
-    createUserManagedIdentity
-    createLinuxDataCollectionRule
-  ]
-}
+// module createPolicyAzureMonitorWindows 'modules/authorization/policy-assignment/subscription/main.bicep' = {
+//   name: 'create-policy-azure-monitor-vminsights-windows'
+//   scope: subscription()
+//   params: {
+//     name: windowsVirtualMachineInsightsPolicyName
+//     displayName: windowsVirtualMachineInsightsPolicyName
+//     description: 'Monitor and secure your Windows virtual machines, virtual machine scale sets, and Arc machines by deploying the Azure Monitor Agent extension and associating the machines with a specified Data Collection Rule. Deployment will occur on machines with supported OS images (or machines matching the provided list of images) in supported regions.'
+//     policyDefinitionId: windowsVirtualMachineInsightsPolicyDefinitionId
+//     parameters: {
+//       DcrResourceId: {
+//         value: createWindowsDataCollectionRule.outputs.resourceId
+//       }
+//     }
+//     location: location
+//     identity: 'UserAssigned'
+//     userAssignedIdentityId: createUserManagedIdentity.outputs.resourceId
+//   }
+//   dependsOn: [
+//     createWindowsDataCollectionRule
+//     createLogAnalyticsWorkspace
+//   ]
+// }
 
-module createLinuxVirtualMachineInsightsPolicyRemediation 'modules/policy-insights/remeditation/subscription/main.bicep' = {
-  name: 'create-linux-vm-data-collection-configuration-remediation'
-  scope: subscription()
-  params: {
-    name: 'virtual-machine-insights-linux-remediation'
-    location: location
-    policyAssignmentId: createLinuxVirtualMachineInsightsPolicy.outputs.resourceId
-    policyDefinitionReferenceId: 'associatedatacollectionrulelinux'
-    resourceCount: 10
-    resourceDiscoveryMode: 'ReEvaluateCompliance'
-    parallelDeployments: 10
-    failureThresholdPercentage: '0.5'
-    filtersLocations: []
-  }
-  dependsOn: [
-    createLinuxVirtualMachineInsightsPolicy
-  ]
-}
+// module createPolicyAzureMonitorWindowsRemediation 'modules/policy-insights/remeditation/subscription/main.bicep' = {
+//   name: 'create-policy-azure-monitor-vm-insights-windows-remediation'
+//   scope: subscription()
+//   params: {
+//     name: 'remediate-windows-vm-insights'
+//     policyAssignmentId: createPolicyAzureMonitorWindows.outputs.resourceId
+//     policyDefinitionReferenceId: 'associatedatacollectionrulewindows'
+//     location: location
+//   }
+//   dependsOn: [
+//     createPolicyAzureMonitorWindows
+//   ]
+// }
 
-module createLinuxVirtualMachineScaleSetInsightsPolicy 'modules/authorization/policy-assignment/subscription/main.bicep' = {
-  name: 'create-linux-vmss-data-collection-configuration'
-  scope: subscription()
-  params: {
-    name: 'virtual-machine-scale-set-insights-linux'
-    subscriptionId: subscription().subscriptionId
-    displayName: linuxVirtualMachineScaleSetInsightsPolicyName
-    description: 'Automatically configure Virtual Machine Scale Set Insights for linux virtual machines'
-    policyDefinitionId: linuxVirtualMachineScaleSetInsightsPolicyDefinitionId
-    parameters: {
-      DcrResourceId: {
-        value: createLinuxDataCollectionRule.outputs.resourceId
-      }
-    }
-    identity: 'UserAssigned'
-    userAssignedIdentityId: '/subscriptions/${subscription().subscriptionId}/resourceGroups/${resourceGroupName}/providers/Microsoft.ManagedIdentity/userAssignedIdentities/${createUserManagedIdentity.outputs.name}'
-    location: location
-  }
-  dependsOn: [
-    createUserManagedIdentity
-    createLinuxDataCollectionRule
-  ]
-}
-
-module createLinuxVirtualMachineScaleSetInsightsPolicyRemediation 'modules/policy-insights/remeditation/subscription/main.bicep' = {
-  name: 'create-linux-vmms-data-collection-configuration-remediation'
-  scope: subscription()
-  params: {
-    name: 'virtual-machine-scale-set-insights-linux-remediation'
-    location: location
-    policyAssignmentId: createLinuxVirtualMachineScaleSetInsightsPolicy.outputs.resourceId
-    policyDefinitionReferenceId: 'associatedatacollectionrulelinux'
-    resourceCount: 10
-    resourceDiscoveryMode: 'ReEvaluateCompliance'
-    parallelDeployments: 10
-    failureThresholdPercentage: '0.5'
-    filtersLocations: []
-  }
-  dependsOn: [
-    createLinuxVirtualMachineScaleSetInsightsPolicy
-  ]
-}
+// module createPolicyAzureMonitorAgentRemediation 'modules/policy-insights/remeditation/subscription/main.bicep' = {
+//   name: 'create-policy-azure-monitor-agent-windows-remediation'
+//   scope: subscription()
+//   params: {
+//     name: 'remediate-windows-vm-insights'
+//     policyAssignmentId: createPolicyAzureMonitorWindows.outputs.resourceId
+//     policyDefinitionReferenceId: 'deployAzureMonitorAgentWindows'
+//     location: location
+//   }
+//   dependsOn: [
+//     createPolicyAzureMonitorWindows
+//   ]
+// }
