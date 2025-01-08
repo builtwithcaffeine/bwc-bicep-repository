@@ -22,7 +22,7 @@ param vmUserName string
 param vmUserPassword string
 
 @description('The Resource Group Name')
-param resourceGroupName string = 'rg-learning-linux-${locationShortCode}'
+param resourceGroupName string = 'rg-learning-penguin-${locationShortCode}'
 
 @description('The User Assigned Managed Identity Name')
 param userManagedIdentityName string = 'id-azure-policy-vminsights-${locationShortCode}'
@@ -105,9 +105,13 @@ module createLogAnalyticsWorkspace 'br/public:avm/res/operational-insights/works
 
 module createLinuxDataCollectionRule 'br/public:avm/res/insights/data-collection-rule:0.4.2' = {
   name: 'create-linux-data-collection-rule'
-  scope: resourceGroup(resourceGroupName) 
+  scope: resourceGroup(resourceGroupName)
   params: {
+    name: linuxDataCollectionRuleName
+    location: location
     dataCollectionRuleProperties: {
+      kind: 'Linux'
+      description: 'Data collection rule for VM Insights.'
       dataFlows: [
         {
           streams: [
@@ -150,23 +154,16 @@ module createLinuxDataCollectionRule 'br/public:avm/res/insights/data-collection
           }
         ]
       }
-      description: 'Collect Operating System Diagnostic Data'
       destinations: {
-        azureMonitorMetrics: {
-          name: 'azureMonitorMetrics-default'
-        }
         logAnalytics: [
           {
-            name: createLogAnalyticsWorkspace.outputs.name
-            workspaceId: createLogAnalyticsWorkspace.outputs.logAnalyticsWorkspaceId
             workspaceResourceId: createLogAnalyticsWorkspace.outputs.resourceId
+            workspaceId: createLogAnalyticsWorkspace.outputs.logAnalyticsWorkspaceId
+            name: createLogAnalyticsWorkspace.outputs.name
           }
         ]
       }
-      kind: 'Linux'
     }
-    name: linuxDataCollectionRuleName
-    location: location
   }
   dependsOn: [
     createLogAnalyticsWorkspace

@@ -22,10 +22,10 @@ param vmUserName string
 param vmUserPassword string
 
 @description('The Resource Group Name')
-param resourceGroupName string = 'rg-learning-windows-${locationShortCode}'
+param resourceGroupName string = 'rg-learning-msftwin-${locationShortCode}'
 
 @description('The User Assigned Managed Identity Name')
-param userManagedIdentityName string = 'id-azure-policy-vminsights-${locationShortCode}'
+param userManagedIdentityName string = 'id-azure-policy-vminsights-msft-${locationShortCode}'
 
 @description('The Network Security Group Name')
 param networkSecurityGroupName string = 'nsg-learning-windows-${locationShortCode}'
@@ -77,8 +77,8 @@ module createUserManagedIdentity 'br/public:avm/res/managed-identity/user-assign
   ]
 }
 
-module createAzureRoleAssignment 'modules/authorization/role-assignment/subscription/main.bicep' = {
-  name: 'create-azure-role-assignment'
+module createAzureRoleAssignmentVirtualMachineContributor 'modules/authorization/role-assignment/subscription/main.bicep' = {
+  name: 'create-azure-role-assignment-vm-contributor'
   scope: subscription()
   params: {
     principalType: 'ServicePrincipal'
@@ -89,6 +89,33 @@ module createAzureRoleAssignment 'modules/authorization/role-assignment/subscrip
     createUserManagedIdentity
   ]
 }
+
+module createAzureRoleAssignmentLogAnalyticsContributor 'modules/authorization/role-assignment/subscription/main.bicep' = {
+  name: 'create-azure-role-assignment-law-contributor'
+  scope: subscription()
+  params: {
+    principalType: 'ServicePrincipal'
+    roleDefinitionIdOrName: '/providers/Microsoft.Authorization/roleDefinitions/92aaf0da-9dab-42b6-94a3-d43ce8d16293' // Log Analytics Contributor
+    principalId: createUserManagedIdentity.outputs.principalId
+  }
+  dependsOn: [
+    createUserManagedIdentity
+  ]
+}
+
+module createAzureRoleAssignmentMonitoringContributor 'modules/authorization/role-assignment/subscription/main.bicep' = {
+  name: 'create-azure-role-assignment-monitoring-contributor'
+  scope: subscription()
+  params: {
+    principalType: 'ServicePrincipal'
+    roleDefinitionIdOrName: '/providers/Microsoft.Authorization/roleDefinitions/749f88d5-cbae-40b8-bcfc-e573ddc772fa' // Monitoring Contributor
+    principalId: createUserManagedIdentity.outputs.principalId
+  }
+  dependsOn: [
+    createUserManagedIdentity
+  ]
+}
+
 
 module createLogAnalyticsWorkspace 'br/public:avm/res/operational-insights/workspace:0.9.0' = {
   name: 'create-log-analytics-workspace'
