@@ -22,7 +22,7 @@ param vmUserName string
 param vmUserPassword string
 
 @description('The Resource Group Name')
-param resourceGroupName string = 'rg-learning-windows-${locationShortCode}-123'
+param resourceGroupName string = 'rg-learning-windows-${locationShortCode}'
 
 @description('The User Assigned Managed Identity Name')
 param userManagedIdentityName string = 'id-azure-policy-vminsights-win-${locationShortCode}'
@@ -46,7 +46,7 @@ param subnetName string = 'snet-learning-windows-${locationShortCode}'
 // Azure Verified Modules
 
 module createResourceGroup 'br/public:avm/res/resources/resource-group:0.4.0' = {
-  name: 'createResourceGroup'
+  name: 'create-resource-group'
   params: {
     name: resourceGroupName
     location: location
@@ -54,7 +54,7 @@ module createResourceGroup 'br/public:avm/res/resources/resource-group:0.4.0' = 
 }
 
 module createUserManagedIdentity 'br/public:avm/res/managed-identity/user-assigned-identity:0.4.0' = {
-  name: 'createUserManagedIdentity'
+  name: 'create-user-managed-identity'
   scope: resourceGroup(resourceGroupName)
   params: {
     name: userManagedIdentityName
@@ -175,7 +175,7 @@ module createWindowsDataCollectionRule 'br/public:avm/res/insights/data-collecti
 }
 
 module createNetworkSecurityGroup 'br/public:avm/res/network/network-security-group:0.5.0' = {
-  name: 'createNetworkSecurityGroup'
+  name: 'create-network-security-group'
   scope: resourceGroup(resourceGroupName)
   params: {
     name: networkSecurityGroupName
