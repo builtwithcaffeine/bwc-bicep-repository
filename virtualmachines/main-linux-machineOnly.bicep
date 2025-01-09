@@ -22,7 +22,7 @@ param vmUserName string
 param vmUserPassword string
 
 @description('The Resource Group Name')
-param resourceGroupName string = 'rg-learning-penguin-${locationShortCode}'
+param resourceGroupName string = 'rg-learning-linux-${locationShortCode}'
 
 @description('The User Assigned Managed Identity Name')
 param userManagedIdentityName string = 'id-azure-policy-vminsights-${locationShortCode}'

@@ -22,7 +22,7 @@ param vmUserName string
 param vmUserPassword string
 
 @description('The Resource Group Name')
-param resourceGroupName string = 'rg-learning-msftwin-${locationShortCode}'
+param resourceGroupName string = 'rg-learning-windows-${locationShortCode}'
 
 @description('The Network Security Group Name')
 param networkSecurityGroupName string = 'nsg-learning-windows-${locationShortCode}'
