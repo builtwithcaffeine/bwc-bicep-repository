@@ -218,10 +218,10 @@ $vmUserPassword = New-RandomPassword -length 16
 Get-BicepVersion
 
 # Azure CLI Authentication
+Write-Output "> Logging into Azure for $subscriptionId"
 az login --output none --only-show-errors
 
 # Configure Azure Cli User Experience
-Write-Output "> Logging into Azure for $subscriptionId"
 az config set core.login_experience_v2=off --only-show-errors
 
 Write-Output "> Setting subscription to $subscriptionId"

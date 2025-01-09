@@ -22,7 +22,7 @@ param vmUserName string
 param vmUserPassword string
 
 @description('The Resource Group Name')
-param resourceGroupName string = 'rg-learning-windows-${locationShortCode}'
+param resourceGroupName string = 'rg-learning-windows-${locationShortCode}-123'
 
 @description('The User Assigned Managed Identity Name')
 param userManagedIdentityName string = 'id-azure-policy-vminsights-win-${locationShortCode}'
@@ -41,13 +41,6 @@ param virtualNetworkName string = 'vnet-learning-windows-${locationShortCode}'
 
 @description('The Subnet Name')
 param subnetName string = 'snet-learning-windows-${locationShortCode}'
-
-@description('Azure Policy Name')
-param windowsVirtualMachineInsightsPolicyName string = 'Configure Virtual Machine Insights for Windows'
-
-@description('The Azure Policy Definition Id')
-param windowsVirtualMachineInsightsPolicyDefinitionId string = '/providers/Microsoft.Authorization/policyDefinitions/244efd75-0d92-453c-b9a3-7d73ca36ed52'
-
 
 //
 // Azure Verified Modules
@@ -72,6 +65,19 @@ module createUserManagedIdentity 'br/public:avm/res/managed-identity/user-assign
   ]
 }
 
+module createLogAnalyticsWorkspace 'br/public:avm/res/operational-insights/workspace:0.9.0' = {
+  name: 'create-log-analytics-workspace'
+  scope: resourceGroup(resourceGroupName)
+  params: {
+    name: logAnalyticsWorkspaceName
+    location: location
+    skuName: 'PerGB2018'
+  }
+  dependsOn: [
+    createUserManagedIdentity
+  ]
+}
+
 module createResourceRoleAssignmentLogAnalyticsContributor 'br/public:avm/ptn/authorization/resource-role-assignment:0.1.1' = {
   name: 'create-resource-role-assignment-law-contributor'
   scope: resourceGroup(resourceGroupName)
@@ -79,9 +85,9 @@ module createResourceRoleAssignmentLogAnalyticsContributor 'br/public:avm/ptn/au
     resourceId: createLogAnalyticsWorkspace.outputs.resourceId
     principalId: createUserManagedIdentity.outputs.principalId
     roleDefinitionId: '/providers/Microsoft.Authorization/roleDefinitions/92aaf0da-9dab-42b6-94a3-d43ce8d16293' // Log Analytics Contributor
+    principalType: 'ServicePrincipal'
   }
   dependsOn: [
-    createUserManagedIdentity
     createLogAnalyticsWorkspace
   ]
 }
@@ -93,23 +99,10 @@ module createResourceRoleAssignmentMonitoringContributor 'br/public:avm/ptn/auth
     resourceId: createLogAnalyticsWorkspace.outputs.resourceId
     principalId: createUserManagedIdentity.outputs.principalId
     roleDefinitionId: '/providers/Microsoft.Authorization/roleDefinitions/749f88d5-cbae-40b8-bcfc-e573ddc772fa' // Monitoring Contributor
-  }
-    dependsOn: [
-    createUserManagedIdentity
-    createLogAnalyticsWorkspace
-  ]
-}
-
-module createLogAnalyticsWorkspace 'br/public:avm/res/operational-insights/workspace:0.9.0' = {
-  name: 'create-log-analytics-workspace'
-  scope: resourceGroup(resourceGroupName)
-  params: {
-    name: logAnalyticsWorkspaceName
-    location: location
-    skuName: 'PerGB2018'
+    principalType: 'ServicePrincipal'
   }
   dependsOn: [
-    createResourceGroup
+    createLogAnalyticsWorkspace
   ]
 }
 
@@ -176,7 +169,8 @@ module createWindowsDataCollectionRule 'br/public:avm/res/insights/data-collecti
     }
   }
   dependsOn: [
-    createLogAnalyticsWorkspace
+      createLogAnalyticsWorkspace
+      createUserManagedIdentity
   ]
 }
 
@@ -225,7 +219,7 @@ module createVirtualNetwork 'br/public:avm/res/network/virtual-network:0.5.1' = 
     ]
   }
   dependsOn: [
-    createResourceGroup
+      createNetworkSecurityGroup
   ]
 }
 
@@ -284,57 +278,7 @@ module createVirtualMachine 'br/public:avm/res/compute/virtual-machine:0.8.0' = 
     }
   }
   dependsOn: [
-    createVirtualNetwork
+      createVirtualNetwork
+      createWindowsDataCollectionRule
   ]
 }
-
-// module createPolicyAzureMonitorWindows 'modules/authorization/policy-assignment/subscription/main.bicep' = {
-//   name: 'create-policy-azure-monitor-vminsights-windows'
-//   scope: subscription()
-//   params: {
-//     name: windowsVirtualMachineInsightsPolicyName
-//     displayName: windowsVirtualMachineInsightsPolicyName
-//     description: 'Monitor and secure your Windows virtual machines, virtual machine scale sets, and Arc machines by deploying the Azure Monitor Agent extension and associating the machines with a specified Data Collection Rule. Deployment will occur on machines with supported OS images (or machines matching the provided list of images) in supported regions.'
-//     policyDefinitionId: windowsVirtualMachineInsightsPolicyDefinitionId
-//     parameters: {
-//       DcrResourceId: {
-//         value: createWindowsDataCollectionRule.outputs.resourceId
-//       }
-//     }
-//     location: location
-//     identity: 'UserAssigned'
-//     userAssignedIdentityId: createUserManagedIdentity.outputs.resourceId
-//   }
-//   dependsOn: [
-//     createWindowsDataCollectionRule
-//     createLogAnalyticsWorkspace
-//   ]
-// }
-
-// module createPolicyAzureMonitorWindowsRemediation 'modules/policy-insights/remeditation/subscription/main.bicep' = {
-//   name: 'create-policy-azure-monitor-vm-insights-windows-remediation'
-//   scope: subscription()
-//   params: {
-//     name: 'remediate-windows-vm-insights'
-//     policyAssignmentId: createPolicyAzureMonitorWindows.outputs.resourceId
-//     policyDefinitionReferenceId: 'associatedatacollectionrulewindows'
-//     location: location
-//   }
-//   dependsOn: [
-//     createPolicyAzureMonitorWindows
-//   ]
-// }
-
-// module createPolicyAzureMonitorAgentRemediation 'modules/policy-insights/remeditation/subscription/main.bicep' = {
-//   name: 'create-policy-azure-monitor-agent-windows-remediation'
-//   scope: subscription()
-//   params: {
-//     name: 'remediate-windows-vm-insights'
-//     policyAssignmentId: createPolicyAzureMonitorWindows.outputs.resourceId
-//     policyDefinitionReferenceId: 'deployAzureMonitorAgentWindows'
-//     location: location
-//   }
-//   dependsOn: [
-//     createPolicyAzureMonitorWindows
-//   ]
-// }

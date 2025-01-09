@@ -22,10 +22,10 @@ param vmUserName string
 param vmUserPassword string
 
 @description('The Resource Group Name')
-param resourceGroupName string = 'rg-learning-penguin-${locationShortCode}'
+param resourceGroupName string = 'rg-learning-linux-${locationShortCode}-123'
 
 @description('The User Assigned Managed Identity Name')
-param userManagedIdentityName string = 'id-azure-policy-vminsights-${locationShortCode}'
+param userManagedIdentityName string = 'id-azure-policy-vminsights-lin-${locationShortCode}'
 
 @description('The Network Security Group Name')
 param networkSecurityGroupName string = 'nsg-learning-linux-${locationShortCode}'
@@ -34,19 +34,13 @@ param networkSecurityGroupName string = 'nsg-learning-linux-${locationShortCode}
 param logAnalyticsWorkspaceName string = 'law-learning-linux-${locationShortCode}'
 
 @description('The Data Collection Rule Name')
-param linuxDataCollectionRuleName string = 'MSVMI-dcr-linux'
+param linuxDataCollectionRuleName string = 'MSVMI-vminsights-linux'
 
 @description('The Virtual Network Name')
 param virtualNetworkName string = 'vnet-learning-linux-${locationShortCode}'
 
 @description('The Subnet Name')
 param subnetName string = 'snet-learning-linux-${locationShortCode}'
-
-@description('Azure Policy Name')
-param linuxVirtualMachineInsightsPolicyName string = 'Configure Virtual Machine Insights for Linux'
-
-@description('The Azure Policy Definition Id')
-param linuxVirtualMachineInsightsPolicyDefinitionId string = '/providers/Microsoft.Authorization/policySetDefinitions/118f04da-0375-44d1-84e3-0fd9e1849403'
 
 //
 // Azure Verified Modules
@@ -71,19 +65,6 @@ module createUserManagedIdentity 'br/public:avm/res/managed-identity/user-assign
   ]
 }
 
-module createAzureRoleAssignment 'modules/authorization/role-assignment/subscription/main.bicep' = {
-  name: 'create-azure-role-assignment'
-  scope: subscription()
-  params: {
-    principalType: 'ServicePrincipal'
-    roleDefinitionIdOrName: '/providers/Microsoft.Authorization/roleDefinitions/9980e02c-c2be-4d73-94e8-173b1dc7cf3c' // Virtual Machine Contributor
-    principalId: createUserManagedIdentity.outputs.principalId
-  }
-  dependsOn: [
-    createUserManagedIdentity
-  ]
-}
-
 module createLogAnalyticsWorkspace 'br/public:avm/res/operational-insights/workspace:0.9.0' = {
   name: 'create-log-analytics-workspace'
   scope: resourceGroup(resourceGroupName)
@@ -93,7 +74,35 @@ module createLogAnalyticsWorkspace 'br/public:avm/res/operational-insights/works
     skuName: 'PerGB2018'
   }
   dependsOn: [
-    createResourceGroup
+    createUserManagedIdentity
+  ]
+}
+
+module createResourceRoleAssignmentLogAnalyticsContributor 'br/public:avm/ptn/authorization/resource-role-assignment:0.1.1' = {
+  name: 'create-resource-role-assignment-law-contributor'
+  scope: resourceGroup(resourceGroupName)
+  params: {
+    resourceId: createLogAnalyticsWorkspace.outputs.resourceId
+    principalId: createUserManagedIdentity.outputs.principalId
+    roleDefinitionId: '/providers/Microsoft.Authorization/roleDefinitions/92aaf0da-9dab-42b6-94a3-d43ce8d16293' // Log Analytics Contributor
+    principalType: 'ServicePrincipal'
+  }
+  dependsOn: [
+    createLogAnalyticsWorkspace
+  ]
+}
+
+module createResourceRoleAssignmentMonitoringContributor 'br/public:avm/ptn/authorization/resource-role-assignment:0.1.1' = {
+  name: 'create-resource-role-assignment-monitoring-contributor'
+  scope: resourceGroup(resourceGroupName)
+  params: {
+    resourceId: createLogAnalyticsWorkspace.outputs.resourceId
+    principalId: createUserManagedIdentity.outputs.principalId
+    roleDefinitionId: '/providers/Microsoft.Authorization/roleDefinitions/749f88d5-cbae-40b8-bcfc-e573ddc772fa' // Monitoring Contributor
+    principalType: 'ServicePrincipal'
+  }
+  dependsOn: [
+    createLogAnalyticsWorkspace
   ]
 }
 
@@ -161,6 +170,7 @@ module createLinuxDataCollectionRule 'br/public:avm/res/insights/data-collection
   }
   dependsOn: [
     createLogAnalyticsWorkspace
+    createUserManagedIdentity
   ]
 }
 
@@ -209,7 +219,7 @@ module createVirtualNetwork 'br/public:avm/res/network/virtual-network:0.5.1' = 
     ]
   }
   dependsOn: [
-    createResourceGroup
+    createNetworkSecurityGroup
   ]
 }
 
@@ -256,94 +266,19 @@ module createVirtualMachine 'br/public:avm/res/compute/virtual-machine:0.8.0' = 
         storageAccountType: 'Premium_LRS'
       }
     }
+    extensionMonitoringAgentConfig: {
+      dataCollectionRuleAssociations: [
+        {
+          dataCollectionRuleResourceId: createLinuxDataCollectionRule.outputs.resourceId
+          name: 'SendMetricsToLAW'
+        }
+      ]
+      enabled: true
+      enableAutomaticUpgrade: true
+    }
   }
   dependsOn: [
     createVirtualNetwork
-  ]
-}
-
-module createLinuxVirtualMachineInsightsPolicy 'modules/authorization/policy-assignment/subscription/main.bicep' = {
-  name: 'create-linux-vm-data-collection-configuration'
-  scope: subscription()
-  params: {
-    name: 'virtual-machine-insights-linux'
-    subscriptionId: subscription().subscriptionId
-    displayName: linuxVirtualMachineInsightsPolicyName
-    description: 'Automatically configure Virtual Machine Insights for linux virtual machines'
-    policyDefinitionId: linuxVirtualMachineInsightsPolicyDefinitionId
-    parameters: {
-      DcrResourceId: {
-        value: createLinuxDataCollectionRule.outputs.resourceId
-      }
-    }
-    identity: 'UserAssigned'
-    userAssignedIdentityId: '/subscriptions/${subscription().subscriptionId}/resourceGroups/${resourceGroupName}/providers/Microsoft.ManagedIdentity/userAssignedIdentities/${createUserManagedIdentity.outputs.name}'
-    location: location
-  }
-  dependsOn: [
-    createUserManagedIdentity
     createLinuxDataCollectionRule
-  ]
-}
-
-module createLinuxVirtualMachineInsightsPolicyRemediation 'modules/policy-insights/remeditation/subscription/main.bicep' = {
-  name: 'create-linux-vm-data-collection-configuration-remediation'
-  scope: subscription()
-  params: {
-    name: 'virtual-machine-insights-linux-remediation'
-    location: location
-    policyAssignmentId: createLinuxVirtualMachineInsightsPolicy.outputs.resourceId
-    policyDefinitionReferenceId: 'associatedatacollectionrulelinux'
-    resourceCount: 10
-    resourceDiscoveryMode: 'ReEvaluateCompliance'
-    parallelDeployments: 10
-    failureThresholdPercentage: '0.5'
-    filtersLocations: []
-  }
-  dependsOn: [
-    createLinuxVirtualMachineInsightsPolicy
-  ]
-}
-
-module createLinuxVirtualMachineScaleSetInsightsPolicy 'modules/authorization/policy-assignment/subscription/main.bicep' = {
-  name: 'create-linux-vmss-data-collection-configuration'
-  scope: subscription()
-  params: {
-    name: 'virtual-machine-scale-set-insights-linux'
-    subscriptionId: subscription().subscriptionId
-    displayName: linuxVirtualMachineScaleSetInsightsPolicyName
-    description: 'Automatically configure Virtual Machine Scale Set Insights for linux virtual machines'
-    policyDefinitionId: linuxVirtualMachineScaleSetInsightsPolicyDefinitionId
-    parameters: {
-      DcrResourceId: {
-        value: createLinuxDataCollectionRule.outputs.resourceId
-      }
-    }
-    identity: 'UserAssigned'
-    userAssignedIdentityId: '/subscriptions/${subscription().subscriptionId}/resourceGroups/${resourceGroupName}/providers/Microsoft.ManagedIdentity/userAssignedIdentities/${createUserManagedIdentity.outputs.name}'
-    location: location
-  }
-  dependsOn: [
-    createUserManagedIdentity
-    createLinuxDataCollectionRule
-  ]
-}
-
-module createLinuxVirtualMachineScaleSetInsightsPolicyRemediation 'modules/policy-insights/remeditation/subscription/main.bicep' = {
-  name: 'create-linux-vmms-data-collection-configuration-remediation'
-  scope: subscription()
-  params: {
-    name: 'virtual-machine-scale-set-insights-linux-remediation'
-    location: location
-    policyAssignmentId: createLinuxVirtualMachineScaleSetInsightsPolicy.outputs.resourceId
-    policyDefinitionReferenceId: 'associatedatacollectionrulelinux'
-    resourceCount: 10
-    resourceDiscoveryMode: 'ReEvaluateCompliance'
-    parallelDeployments: 10
-    failureThresholdPercentage: '0.5'
-    filtersLocations: []
-  }
-  dependsOn: [
-    createLinuxVirtualMachineScaleSetInsightsPolicy
   ]
 }
