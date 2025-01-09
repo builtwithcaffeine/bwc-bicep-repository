@@ -22,10 +22,10 @@ param vmUserName string
 param vmUserPassword string
 
 @description('The Resource Group Name')
-param resourceGroupName string = 'rg-learning-linux-vminsights-${locationShortCode}'
+param resourceGroupName string = 'rg-learning-linux-vminsights-${locationShortCode}-123'
 
 @description('The User Assigned Managed Identity Name')
-param userManagedIdentityName string = 'id-azure-policy-vminsights-${locationShortCode}'
+param userManagedIdentityName string = 'id-azure-policy-vminsights-lin-${locationShortCode}'
 
 @description('The Network Security Group Name')
 param networkSecurityGroupName string = 'nsg-learning-linux-${locationShortCode}'
@@ -46,11 +46,23 @@ param subnetName string = 'snet-learning-linux-${locationShortCode}'
 // Azure Verified Modules
 
 module createResourceGroup 'br/public:avm/res/resources/resource-group:0.4.0' = {
-  name: 'create-resource-group'
+  name: 'createResourceGroup'
   params: {
     name: resourceGroupName
     location: location
   }
+}
+
+module createUserManagedIdentity 'br/public:avm/res/managed-identity/user-assigned-identity:0.4.0' = {
+  name: 'createUserManagedIdentity'
+  scope: resourceGroup(resourceGroupName)
+  params: {
+    name: userManagedIdentityName
+    location: location
+  }
+  dependsOn: [
+    createResourceGroup
+  ]
 }
 
 module createLogAnalyticsWorkspace 'br/public:avm/res/operational-insights/workspace:0.9.0' = {
@@ -60,10 +72,37 @@ module createLogAnalyticsWorkspace 'br/public:avm/res/operational-insights/works
     name: logAnalyticsWorkspaceName
     location: location
     skuName: 'PerGB2018'
-    dataRetention: 90
   }
   dependsOn: [
-    createResourceGroup
+    createUserManagedIdentity
+  ]
+}
+
+module createResourceRoleAssignmentLogAnalyticsContributor 'br/public:avm/ptn/authorization/resource-role-assignment:0.1.1' = {
+  name: 'create-resource-role-assignment-law-contributor'
+  scope: resourceGroup(resourceGroupName)
+  params: {
+    resourceId: createLogAnalyticsWorkspace.outputs.resourceId
+    principalId: createUserManagedIdentity.outputs.principalId
+    roleDefinitionId: '/providers/Microsoft.Authorization/roleDefinitions/92aaf0da-9dab-42b6-94a3-d43ce8d16293' // Log Analytics Contributor
+    principalType: 'ServicePrincipal'
+  }
+  dependsOn: [
+    createLogAnalyticsWorkspace
+  ]
+}
+
+module createResourceRoleAssignmentMonitoringContributor 'br/public:avm/ptn/authorization/resource-role-assignment:0.1.1' = {
+  name: 'create-resource-role-assignment-monitoring-contributor'
+  scope: resourceGroup(resourceGroupName)
+  params: {
+    resourceId: createLogAnalyticsWorkspace.outputs.resourceId
+    principalId: createUserManagedIdentity.outputs.principalId
+    roleDefinitionId: '/providers/Microsoft.Authorization/roleDefinitions/749f88d5-cbae-40b8-bcfc-e573ddc772fa' // Monitoring Contributor
+    principalType: 'ServicePrincipal'
+  }
+  dependsOn: [
+    createLogAnalyticsWorkspace
   ]
 }
 
@@ -131,12 +170,12 @@ module createLinuxDataCollectionRule 'br/public:avm/res/insights/data-collection
   }
   dependsOn: [
     createLogAnalyticsWorkspace
-    createVirtualNetwork
+    createUserManagedIdentity
   ]
 }
 
 module createNetworkSecurityGroup 'br/public:avm/res/network/network-security-group:0.5.0' = {
-  name: 'create-network-security-group'
+  name: 'createNetworkSecurityGroup'
   scope: resourceGroup(resourceGroupName)
   params: {
     name: networkSecurityGroupName
