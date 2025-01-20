@@ -26,10 +26,11 @@ param tags object = {
 }
 
 // Module Variables
-var number = 8
+var number = '03'
 var resourceGroupName = 'rg${number}-bicep-devcenter-${environmentType}-${locationShortCode}'
 var userAssignedIdentityName = 'id${number}-bicep-devcenter-${environmentType}'
 var keyvaultName = 'kv${number}-bicep-devcenter-${environmentType}'
+var imageGalleryName = 'imgal${number}${environmentType}'
 var devCenterName = 'dc${number}-bicep-devcenter-${environmentType}'
 
 
@@ -70,6 +71,26 @@ module createKeyVault 'br/public:avm/res/key-vault/vault:0.11.2' = {
   ]
 }
 
+// [Module] - Image Gallery
+module createImageGallery 'br/public:avm/res/compute/gallery:0.8.1' = {
+  name: 'createImageGallery'
+  scope: resourceGroup(resourceGroupName)
+  params: {
+    name: imageGalleryName
+    location: location
+    roleAssignments: [
+      {
+        principalId: createManagedIdentity.outputs.principalId
+        roleDefinitionIdOrName: 'acdd72a7-3385-48ef-bd42-f606fba81ae7'
+      }
+    ]
+    tags: tags
+  }
+  dependsOn: [
+    createManagedIdentity
+  ]
+}
+
 // [Module] - Dev Center
 module createDevCenter 'modules/dev-center/main.bicep' = {
   name: 'createDevCenter'
@@ -83,31 +104,41 @@ module createDevCenter 'modules/dev-center/main.bicep' = {
     catalogItemSyncEnableStatus: 'Disabled'
     microsoftHostedNetworkEnableStatus: 'Disabled'
     environmentName: ['dev', 'acc', 'prod']
-    environmentTags: [
-      {
-        environment: 'dev'
-        tags: {
-          environmentType: 'dev'
-          deployedBy: deployedBy
-          deployedDate: deployDate
-        }
-      }
-      {
-        environment: 'acc'
-        tags: {
-          environmentType: 'acc'
-          deployedBy: deployedBy
-          deployedDate: deployDate
-        }
-      }
-      {
-        environment: 'prod'
-        tags: {
-          environmentType: 'prod'
-          deployedBy: deployedBy
-          deployedDate: deployDate
-        }
-      }
+    // environmentTags: [
+    //   {
+    //     environment: 'dev'
+    //     tags: {
+    //       environmentType: 'dev'
+    //       deployedBy: deployedBy
+    //       deployedDate: deployDate
+    //     }
+    //   }
+    //   {
+    //     environment: 'acc'
+    //     tags: {
+    //       environmentType: 'acc'
+    //       deployedBy: deployedBy
+    //       deployedDate: deployDate
+    //     }
+    //   }
+    //   {
+    //     environment: 'prod'
+    //     tags: {
+    //       environmentType: 'prod'
+    //       deployedBy: deployedBy
+    //       deployedDate: deployDate
+    //     }
+    //   }
+    // ]
+    imageGalleryName: imageGalleryName
+    imageGalleryResourceId: createImageGallery.outputs.resourceId
+    devBoxDefinitions: [
+    {
+      name: 'devbox1'
+      imageReference: 'microsoftwindowsdesktop_windows-ent-cpc_win11-24h2-ent-cpc' // this is broke! 
+      skuName: 'general_i_8c32gb256ssd_v2'
+      hibernateSupport: 'Disabled'
+    }
     ]
     tags: tags
   }

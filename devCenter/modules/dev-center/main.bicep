@@ -4,14 +4,15 @@ param devCenterName string
 @description('The location of the Dev Center resource.')
 param location string = 'westeurope'
 
-@description('Enable or disable system-assigned or user-assigned identity.')
+@description('The identity type for the Dev Center resource. Supports None, SystemAssigned, or UserAssigned.')
 @allowed([
   'None'
   'SystemAssigned'
   'UserAssigned'
 ])
-param identityType string = 'None' // Default is None, can be 'SystemAssigned' or 'UserAssigned'
+param identityType string = 'None'
 
+@description('The resource ID of the user-assigned identity. Required if identityType is UserAssigned.')
 param userAssignedIdentityId string = ''
 
 @description('Enable or disable catalog item synchronization.')
@@ -21,29 +22,50 @@ param userAssignedIdentityId string = ''
 ])
 param catalogItemSyncEnableStatus string = 'Enabled'
 
-@description('Enable or disable Microsoft-hosted network.')
+@description('Enable or disable the Microsoft-hosted network.')
 @allowed([
   'Enabled'
   'Disabled'
 ])
 param microsoftHostedNetworkEnableStatus string = 'Enabled'
 
-@description('Enable or disable installation of Azure Monitor agent.')
+@description('Enable or disable the installation of the Azure Monitor agent.')
 @allowed([
   'Enabled'
   'Disabled'
 ])
 param installAzureMonitorAgentEnableStatus string = 'Enabled'
 
-@description('The environment name(s) to create (e.g., dev or an array like [dev, acc, prod]).')
-param environmentName array = ['dev'] // Default to ['dev'], can be a single string or an array
+@description('The names of the environments to create. Can be a single name or an array, e.g., [dev, acc, prod].')
+param environmentName array = ['dev']
 
-@description('Tags to apply to each environment. This is an array where each element is a tag object for each environment.')
-param environmentTags array = [] // Default to no environment-specific tags
+@description('Tags to apply to the Dev Center resource.')
+param tags object = {}
 
-@description('Tags to apply to resources.')
-param tags object = {} // Default to no tags
+@description('The name of the image gallery to associate with the Dev Center resource.')
+param imageGalleryName string = ''
 
+@description('The resource ID of the image gallery to associate with the Dev Center resource.')
+param imageGalleryResourceId string = ''
+
+@description('An array of Dev Box configurations.')
+@allowed([
+  'Enabled'
+  'Disabled'
+])
+param hibernateSupport string = 'Disabled'
+
+@description('An array of Dev Box configurations.')
+param devBoxDefinitions array = [
+  {
+    name: ''
+    imageReference: ''
+    skuName: ''
+    hibernateSupport: hibernateSupport
+  }
+]
+
+// Define the Dev Center resource
 resource devCenter 'Microsoft.DevCenter/devcenters@2024-08-01-preview' = {
   name: devCenterName
   location: location
@@ -54,7 +76,7 @@ resource devCenter 'Microsoft.DevCenter/devcenters@2024-08-01-preview' = {
     }
   } : identityType == 'SystemAssigned' ? {
     type: 'SystemAssigned'
-  } : null // Default to no identity
+  } : {}
   properties: {
     projectCatalogSettings: {
       catalogItemSyncEnableStatus: catalogItemSyncEnableStatus
@@ -66,23 +88,44 @@ resource devCenter 'Microsoft.DevCenter/devcenters@2024-08-01-preview' = {
       installAzureMonitorAgentEnableStatus: installAzureMonitorAgentEnableStatus
     }
   }
-  tags: tags // Apply tags to devCenter resource
+  tags: tags // Apply tags as an object
 }
 
-// Create a devCenterEnvironment resource for each environment name in the array
+// Define the image gallery resource associated with the Dev Center
+resource devCenterGallery 'Microsoft.DevCenter/devcenters/galleries@2024-10-01-preview' = {
+  parent: devCenter
+  name: imageGalleryName
+  properties: {
+    galleryResourceId: imageGalleryResourceId
+  }
+}
+
+// Define the Dev Box resources based on the array of Dev Box definitions
+resource devBoxDefinitionsResources 'Microsoft.DevCenter/devcenters/devboxdefinitions@2024-10-01-preview' = [for devBox in devBoxDefinitions: {
+  parent: devCenter
+  name: devBox.name
+  location: location
+  properties: {
+    imageReference: {
+      id: devBox.imageReference
+    }
+    sku: {
+      name: devBox.skuName
+    }
+    hibernateSupport: devBox.hibernateSupport
+  }
+}]
+
+// Create environments for each environment name in the array
 resource devCenterEnvironments 'Microsoft.DevCenter/devcenters/environmentTypes@2024-10-01-preview' = [for envName in environmentName: {
   parent: devCenter
   name: envName
   properties: {}
-  //tags: environmentTags[idx] != null ? environmentTags[idx] : {}
 }]
 
-// Outputs
-@description('The name of the Dev Center.')
+// Output the name and ID of the Dev Center resource
+@description('The name of the Dev Center resource.')
 output name string = devCenter.name
 
-@description('The ID of the Dev Center.')
+@description('The ID of the Dev Center resource.')
 output resourceId string = devCenter.id
-
-@description('The principal ID of the Dev Center.')
-output principalId string = devCenter.identity.principalId

@@ -176,7 +176,6 @@ if ($deploy) {
         locationShortCode=$($locationShortCodes.$location) `
         environmentType=$environmentType `
         deployedBy=$azUserAccountName `
-        --confirm-with-what-if `
         --output none
 
     $deployEndTime = Get-Date -Format 'HH:mm:ss'
