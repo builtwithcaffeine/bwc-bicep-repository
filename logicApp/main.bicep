@@ -211,15 +211,24 @@ module createLogicApp 'br/public:avm/res/web/site:0.13.1' = {
   params: {
     name: logicAppName
     kind: 'functionapp,workflowapp'
-    serverFarmResourceId: createAppServicePlan.outputs.resourceId
     location: location
+    serverFarmResourceId: createAppServicePlan.outputs.resourceId
     appInsightResourceId: createApplicationInsights.outputs.resourceId
+    keyVaultAccessIdentityResourceId: createUserManagedIdentity.outputs.resourceId
+    storageAccountRequired: true
+    storageAccountResourceId: createStorageAccount.outputs.resourceId
+    managedIdentities: {
+      userAssignedResourceIds: [
+        createUserManagedIdentity.outputs.resourceId
+      ]
+    }
     appSettingsKeyValuePairs: {
       APP_KIND: 'workflowApp'
       FUNCTIONS_EXTENSION_VERSION: '~4'
       FUNCTIONS_WORKER_RUNTIME: 'dotnet'
       APPLICATIONINSIGHTS_CONNECTION_STRING: createApplicationInsights.outputs.connectionString
-
+      WEBSITE_CONTENTAZUREFILECONNECTIONSTRING: '@Microsoft.KeyVault(VaultName=${keyvaultName};SecretName=connectionString1)'
+      WEBSITE_CONTENTSHARE: logicAppName
     }
     siteConfig: {
       netFrameworkVersion: 'v8.0'
