@@ -234,7 +234,7 @@ module createFunctionApp 'br/public:avm/res/web/site:0.13.1' = {
       WEBSITE_CONTENTSHARE: functionAppName
       FUNCTIONS_EXTENSION_VERSION: '~4'
       FUNCTIONS_WORKER_RUNTIME: 'powershell'
-      managedIdentityId: createUserManagedIdentity.outputs.principalId
+      managedIdentityId: createUserManagedIdentity.outputs.clientId
     }
     siteConfig: {
       alwaysOn: false
