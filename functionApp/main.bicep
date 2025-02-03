@@ -244,7 +244,9 @@ module createFunctionApp 'br/public:avm/res/web/site:0.13.1' = {
       minTlsVersion: '1.3'
       use32BitWorkerProcess: false
       cors: {
-        allowedOrigins: ['*']
+        allowedOrigins: [
+          'https://portal.azure.com/'
+        ]
       }
     }
     basicPublishingCredentialsPolicies: [
