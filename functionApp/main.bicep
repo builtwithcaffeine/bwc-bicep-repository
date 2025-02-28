@@ -30,7 +30,7 @@ param tags object = {
 // Resource Names
 param projectName string = 'bicepbwc'
 
-var resourceGroupName = 'rg-x-${projectName}-${environmentType}-${locationShortCode}'
+var resourceGroupName = 'rg-${projectName}-${environmentType}-${locationShortCode}'
 var userManagedIdentityName = 'id-${projectName}-${environmentType}-${locationShortCode}'
 var keyvaultName = 'kv-${projectName}-${environmentType}'
 
