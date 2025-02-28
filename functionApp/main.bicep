@@ -12,7 +12,7 @@ param locationShortCode string
 @description('Environment Type')
 @allowed([
   'dev'
-  'test'
+  'acc'
   'prod'
 ])
 param environmentType string
@@ -43,30 +43,79 @@ param kvSecretArray array = [
 ]
 
 // Storage Account Variables
-param storageAccountName string = 'sa${projectName}${environmentType}${locationShortCode}'
-param stSkuName string = 'Standard_GRS'
+param storageAccountName string = 'st${projectName}${environmentType}${locationShortCode}'
+
+@allowed([
+  'Standard_LRS'
+  'Standard_GRS'
+  'Standard_RAGRS'
+  'Standard_ZRS'
+  'Premium_LRS'
+])
+@description('Storage Account SKU Name')
+param stSkuName string = 'Standard_LRS'
+
+@allowed([
+  'TLS1_2'
+  'TLS1_3'
+])
+@description('Storage Account TLS Version')
 param stTlsVersion string = 'TLS1_2'
+
+@allowed([
+  'Enabled'
+  'Disabled'
+])
+@description('Storage Account Public Network Access')
 param stPublicNetworkAccess string = 'Enabled'
+
+@allowed([
+  true
+  false
+])
+@description('Storage Account Allowed Shared Key Access')
 param stAllowedSharedKeyAccess bool = true
+
+@description('Storage Account Network ACLs')
 param stNetworkAcls object = {
   bypass: 'AzureServices'
   defaultAction: 'Allow'
 }
 
 // Log Analytics Variables
+@description('Log Analytics Name')
 param logAnalyticsName string = 'log-${projectName}-${environmentType}-${locationShortCode}'
 
+@description('Log Analytics Data Retention')
+param logAnalyticsDataRetention int = 30
+
 // Application Insights Variables
+@description('Application Insights Name')
 param appInsightsName string = 'appi-${projectName}-${environmentType}-${locationShortCode}'
 
 // App Service Plan Variables
+@description('App Service Plan Name')
 param appServicePlanName string = 'asp-${projectName}-${environmentType}-${locationShortCode}'
+
+@description('App Service Plan Capacity')
 param aspCapacity int = 1
+
+@description('App Service Plan SKU Name')
 param aspSkuName string = 'Y1'
+
+@description('App Service Plan Kind')
 param aspKind string = 'linux'
 
 // Azure Function Variables
+@description('Function App Name')
 param functionAppName string = 'func-${projectName}-${environmentType}-${locationShortCode}'
+
+@allowed([
+  true
+  false
+])
+@description('Function App System Assigned Identity')
+param functionAppSystemAssignedIdentity bool = false
 
 //
 // NO HARD CODING UNDER THERE! K THANKS BYE 👋
@@ -96,7 +145,7 @@ module createUserManagedIdentity 'br/public:avm/res/managed-identity/user-assign
 }
 
 // [AVM] - Key Vault
-module createKeyVault 'br/public:avm/res/key-vault/vault:0.11.2' = {
+module createKeyVault 'br/public:avm/res/key-vault/vault:0.12.1' = {
   name: 'create-key-vault'
   scope: resourceGroup(resourceGroupName)
   params: {
@@ -111,18 +160,8 @@ module createKeyVault 'br/public:avm/res/key-vault/vault:0.11.2' = {
     roleAssignments: [
       {
         principalId: createUserManagedIdentity.outputs.principalId
-        roleDefinitionIdOrName: 'Key Vault Administrator'
-        principalType: 'ServicePrincipal'
-      }
-      {
-        principalId: createUserManagedIdentity.outputs.principalId
         roleDefinitionIdOrName: 'Key Vault Secrets Officer'
         principalType: 'ServicePrincipal'
-      }
-      {
-        principalId: userAccountGuid
-        roleDefinitionIdOrName: 'Key Vault Administrator'
-        principalType: 'User'
       }
       {
         principalId: userAccountGuid
@@ -138,7 +177,7 @@ module createKeyVault 'br/public:avm/res/key-vault/vault:0.11.2' = {
 }
 
 // [AVM Module] - Storage Account
-module createStorageAccount 'br/public:avm/res/storage/storage-account:0.15.0' = {
+module createStorageAccount 'br/public:avm/res/storage/storage-account:0.18.1' = {
   name: 'create-storage-account'
   scope: resourceGroup(resourceGroupName)
   params: {
@@ -149,10 +188,10 @@ module createStorageAccount 'br/public:avm/res/storage/storage-account:0.15.0' =
     publicNetworkAccess: stPublicNetworkAccess
     allowSharedKeyAccess: stAllowedSharedKeyAccess
     secretsExportConfiguration: {
-      accessKey1: 'accessKey1'
-      accessKey2: 'accessKey2'
-      connectionString1: 'connectionString1'
-      connectionString2: 'connectionString2'
+      accessKey1Name: 'accessKey1'
+      accessKey2Name: 'accessKey2'
+      connectionString1Name: 'connectionString1'
+      connectionString2Name: 'connectionString2'
       keyVaultResourceId: createKeyVault.outputs.resourceId
     }
     networkAcls: stNetworkAcls
@@ -164,12 +203,13 @@ module createStorageAccount 'br/public:avm/res/storage/storage-account:0.15.0' =
 }
 
 // [AVM Module] - Log Analytics
-module createLogAnalytics 'br/public:avm/res/operational-insights/workspace:0.9.1' = {
+module createLogAnalytics 'br/public:avm/res/operational-insights/workspace:0.11.1' = {
   name: 'create-log-analytics'
   scope: resourceGroup(resourceGroupName)
   params: {
     name: logAnalyticsName
     location: location
+    dataRetention: logAnalyticsDataRetention
     tags: tags
   }
   dependsOn: [
@@ -178,7 +218,7 @@ module createLogAnalytics 'br/public:avm/res/operational-insights/workspace:0.9.
 }
 
 // [AVM Module] - Application Insights
-module createApplicationInsights 'br/public:avm/res/insights/component:0.4.2' = {
+module createApplicationInsights 'br/public:avm/res/insights/component:0.6.0' = {
   name: 'create-app-insights'
   scope: resourceGroup(resourceGroupName)
   params: {
@@ -210,7 +250,7 @@ module createAppServicePlan 'br/public:avm/res/web/serverfarm:0.4.1' = {
 }
 
 // [AVM Module] - Function App
-module createFunctionApp 'br/public:avm/res/web/site:0.13.1' = {
+module createFunctionApp 'br/public:avm/res/web/site:0.15.0' = {
   name: 'create-function-app'
   scope: resourceGroup(resourceGroupName)
   params: {
@@ -224,6 +264,7 @@ module createFunctionApp 'br/public:avm/res/web/site:0.13.1' = {
     storageAccountRequired: true
     storageAccountResourceId: createStorageAccount.outputs.resourceId
     managedIdentities: {
+      systemAssigned: functionAppSystemAssignedIdentity
       userAssignedResourceIds: [
         createUserManagedIdentity.outputs.resourceId
       ]
