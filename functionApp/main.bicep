@@ -286,7 +286,7 @@ module createFunctionApp 'br/public:avm/res/web/site:0.15.0' = {
       use32BitWorkerProcess: false
       cors: {
         allowedOrigins: [
-          'https://portal.azure.com/'
+          'https://portal.azure.com'
         ]
       }
     }
