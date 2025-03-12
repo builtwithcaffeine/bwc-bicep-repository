@@ -41,10 +41,13 @@ param (
     [Parameter(Mandatory = $true, Position = 1, HelpMessage = "Azure Subscription Id is required")]
     [string] $subscriptionId,
 
-    [Parameter(Mandatory = $true, Position = 2, HelpMessage = "Environment Type is required")]
+    [Parameter(Mandatory = $true, Position = 2, HelpMessage = "Customer Name is required")]
+    [string] $customerName,
+
+    [Parameter(Mandatory = $true, Position = 3, HelpMessage = "Environment Type is required")]
     [validateSet('dev', 'acc', 'prod')][string] $environmentType,
 
-    [Parameter(Mandatory = $true, Position = 3, HelpMessage = "Azure Location is required")]
+    [Parameter(Mandatory = $true, Position = 4, HelpMessage = "Azure Location is required")]
     [validateSet("eastus", "eastus2", "westus", "westus2", "centralus", "northcentralus", "southcentralus",
         "westcentralus", "westus3", "eastus3", "northeurope", "westeurope", "swedencentral", "swedensouth",
         "southeastasia", "eastasia", "japaneast", "japanwest", "australiaeast", "australiasoutheast",
@@ -165,12 +168,11 @@ Write-Output "Environment..........: $environmentType"
 Write-Output `r "Checking for 'Azure VPN Enterprise Application'..."
 $vpnAppId = '41b23e61-6c1e-4545-b367-cd054e0ed4b4' # Azure VPN Enterprise Application ID
 $vpnApp = az ad sp show --id $vpnAppId --output json | ConvertFrom-Json
-if ($vpnApp) {
+if (!([string]::IsNullOrEmpty($vpnApp)))  {
     Write-Output "Azure VPN Enterprise Application with AppId $vpnAppId found."
 } else {
     Write-Output "No Enterprise App detected, Launching Registration URL..." ; Start-Sleep -Seconds 2
     Start-Process "https://login.microsoftonline.com/common/oauth2/authorize?client_id=41b23e61-6c1e-4545-b367-cd054e0ed4b4&response_type=code&redirect_uri=https://portal.azure.com&nonce=1234&prompt=admin_consent"
-    exit 1
 }
 
 if ($deploy) {
@@ -186,6 +188,7 @@ if ($deploy) {
         --template-file ./main.bicep `
         --parameters `
         location=$location `
+        customerName=$customerName `
         locationShortCode=$($locationShortCodes.$location) `
         environmentType=$environmentType `
         deployedBy=$azUserAccountName `

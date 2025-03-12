@@ -6,6 +6,9 @@ targetScope = 'subscription' // Please Update this based on deploymentScope Vari
 @description('Azure Location')
 param location string
 
+@description('Customer Name')
+param customerName string
+
 @description('Azure Location Short Code')
 param locationShortCode string
 
@@ -39,7 +42,7 @@ param kvSecretArray array = [
 // Bicep Deployment Variables
 //
 
-var resourceGroupName = 'rg-hub-vgw-${environmentType}-${locationShortCode}'
+var resourceGroupName = 'rg-${customerName}-hub-vgw-${environmentType}-${locationShortCode}'
 
 //
 // Azure Verified Modules - No Hard Coded Values below this line!
@@ -58,7 +61,7 @@ module createVirtualNetwork 'br/public:avm/res/network/virtual-network:0.5.1' = 
   name: 'create-virtual-network'
   scope: resourceGroup(resourceGroupName)
   params: {
-    name: 'vnet-hub-vgw-${environmentType}-${locationShortCode}'
+    name: 'vnet-${customerName}-hub-vgw-${environmentType}-${locationShortCode}'
     location: location
     addressPrefixes: [
       '10.0.0.0/27'
@@ -80,7 +83,7 @@ module createUserManagedIdentity 'br/public:avm/res/managed-identity/user-assign
   name: 'create-user-managed-identity'
   scope: resourceGroup(resourceGroupName)
   params: {
-    name: 'id-hub-vgw-${environmentType}-${locationShortCode}'
+    name: 'id-${customerName}-hub-vgw-${environmentType}-${locationShortCode}'
     location: location
   }
   dependsOn: [
@@ -92,7 +95,7 @@ module createKeyVault 'br/public:avm/res/key-vault/vault:0.12.1' = {
   name: 'create-key-vault'
   scope: resourceGroup(resourceGroupName)
   params: {
-    name: 'kv-hub-vgw-${environmentType}-${locationShortCode}'
+    name: 'kv-${customerName}-hub-vgw-${environmentType}-${locationShortCode}'
     sku: 'standard'
     location: location
     tags: tags
@@ -130,7 +133,7 @@ module createVirtualNetworkGateway 'modules/network/virtual-network-gateway/main
   name: 'create-virtual-network-gateway'
   scope: resourceGroup(resourceGroupName)
   params: {
-    name: 'vgw-hub-${environmentType}-${locationShortCode}'
+    name: 'vgw-${customerName}-hub-${environmentType}-${locationShortCode}'
     location: location
     ManagedServiceIdentityUserAssignedIdentities: {
       '${createUserManagedIdentity.outputs.resourceId}': {}
@@ -157,7 +160,7 @@ module createVirtualNetworkGateway 'modules/network/virtual-network-gateway/main
 //   name: 'create-virtual-network-gateway'
 //   scope: resourceGroup(resourceGroupName)
 //   params: {
-//     name: 'vgw-hub-${environmentType}-${locationShortCode}'
+//     name: 'vgw-${customerName}-hub-${environmentType}-${locationShortCode}'
 //     location: location
 //     gatewayType: 'Vpn'
 //     skuName: 'VpnGw1AZ'
