@@ -1,4 +1,4 @@
-targetScope = 'subscription' // Please Update this based on deploymentScope Variable
+targetScope = 'subscription'
 
 //
 // Imported Parameters
@@ -25,13 +25,13 @@ param tags object = {
 //
 // Bicep Deployment Variables
 
-var resourceGroupName = 'rg-example-${environmentType}-${locationShortCode}'
+var resourceGroupName = 'rg-x-example-${environmentType}-${locationShortCode}'
 
 //
 // Azure Verified Modules - No Hard Coded Values below this line!
 
-module createResourceGroup 'br/public:avm/res/resources/resource-group:0.4.0' = {
-  name: 'createResourceGroup'
+module createResourceGroup 'br/public:avm/res/resources/resource-group:0.4.1' = {
+  name: 'create-resource-group'
   params: {
     name: resourceGroupName
     location: location

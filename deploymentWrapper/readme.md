@@ -1,4 +1,4 @@
-# Bicep Deployment Template
+# Azure Deployment Wrapper
 
 ``` text
  - Invoke-AzDeployment.ps1 # Deployment Wrapper
@@ -6,11 +6,62 @@
  - modules # Required for any Custom Bicep Modules
 ```
 
-## Example Deployment
+## Invoke-AzDeployment.ps1
+
+### - User Driven Deployment
+
+Using this option, You will be prompted for you're User Account credentials
 
 ``` powershell
-Invoke-AzDeployment.ps1 -targetScope [tenant, mgmt, sub] -subscriptionId [azure-subscription]  -location [azure-location] -deploy
+.\Invoke-AzDeployment.ps1 -targetScope 'sub' -subscriptionId 'xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx' -location 'westeurope' -environmentType 'dev' -deploy
 ```
+
+### - Service Principal Deployment
+
+To use a Service Principal for authentication, create a JSON file with the following structure:
+
+``` json
+    {
+        "spAppId": "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx",
+        "spAppSecret": "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx",
+        "spTenantId": "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
+    }
+```
+
+Then, reference this file when executing the deployment script:
+
+``` powershell
+.\Invoke-AzDeployment.ps1 -targetScope 'sub' -subscriptionId 'xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx' -location 'westeurope' -environmentType 'dev' -deploy -servicePrincipalAuthentication -spAuthCredentialFile C:\spAuth\auth.txt
+```
+
+## Parameters
+
+| Parameter                        | Description                                                       | Required |
+|----------------------------------|-------------------------------------------------------------------|----------|
+| `-targetScope`                   | The deployment scope (e.g., `sub`, `mgmt`, `tenant`)             | ✅        |
+| `-subscriptionId`                | The target Azure Subscription ID                                 | ✅        |
+| `-location`                      | Azure region for deployment                                      | ✅        |
+| `-environmentType`               | Deployment environment (`dev`, `acc`, `prod`)                    | ✅        |
+| `-deploy`                        | Flag to execute the deployment                                   | ✅        |
+| `-servicePrincipalAuthentication`| Use Service Principal authentication (optional)                  | ❌        |
+| `-spAuthCredentialFile`          | Path to Service Principal credentials JSON file (required if using `-servicePrincipalAuthentication`) | ❌        |
+
+## Notes
+- If using User-Driven Deployment, you must have the necessary Azure permissions to execute the deployment.
+
+- If using Service Principal Deployment, ensure the Service Principal has the correct RBAC permissions for the target subscription.
+
+- The credential file should be stored securely and not committed to source control.
+
+## Troubleshooting
+
+### Authentication Issues
+- Ensure you are logged into the correct Azure subscription using `az login`.
+- If using a Service Principal, verify the credentials in the JSON file.
+
+### Permission Denied Errors
+- Confirm the user or Service Principal has the required **Owner** or **Contributor** role on the subscription.
+
 
 <details closed>
 <summary><h2>Role Based Permissions</h2></summary>
