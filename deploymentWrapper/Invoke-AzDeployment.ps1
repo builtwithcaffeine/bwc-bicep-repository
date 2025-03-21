@@ -77,16 +77,16 @@ param (
     [validateSet('dev', 'acc', 'prod')][string] $environmentType,
 
     [Parameter(Mandatory = $true, Position = 3, HelpMessage = "Azure Location is required")]
-    [validateSet("eastus", "eastus2", "eastus3", "westus", "westus2", "westus3", "centralus", "northcentralus", 
-        "southcentralus", "westcentralus", "canadacentral", "canadaeast", "brazilsouth", "brazilseast", 
-        "northeurope", "westeurope", "swedencentral", "swedensouth", "francecentral", "francesouth", 
-        "germanywestcentral", "germanynorth", "switzerlandnorth", "switzerlandwest", "norwayeast", "norwaywest", 
-        "polandcentral", "spaincentral", "qatarcentral", "uaenorth", "uaecentral", "southafricanorth", 
-        "southafricawest", "southafricaeast", "eastasia", "southeastasia", "japaneast", "japanwest", 
-        "australiaeast", "australiasoutheast", "australiacentral", "australiacentral2", "centralindia", 
-        "southindia", "westindia", "koreacentral", "koreasouth", "chinaeast3", "chinanorth3", "indonesiacentral", 
-        "malaysiawest", "newzealandnorth", "taiwannorth", "israelcentral", "mexicocentral", "greececentral", 
-        "finlandcentral", "austriaeast", "belgiumcentral", "denmarkeast", "norwaysouth", "italynorth", 
+    [validateSet("eastus", "eastus2", "eastus3", "westus", "westus2", "westus3", "centralus", "northcentralus",
+        "southcentralus", "westcentralus", "canadacentral", "canadaeast", "brazilsouth", "brazilseast",
+        "northeurope", "westeurope", "swedencentral", "swedensouth", "francecentral", "francesouth",
+        "germanywestcentral", "germanynorth", "switzerlandnorth", "switzerlandwest", "norwayeast", "norwaywest",
+        "polandcentral", "spaincentral", "qatarcentral", "uaenorth", "uaecentral", "southafricanorth",
+        "southafricawest", "southafricaeast", "eastasia", "southeastasia", "japaneast", "japanwest",
+        "australiaeast", "australiasoutheast", "australiacentral", "australiacentral2", "centralindia",
+        "southindia", "westindia", "koreacentral", "koreasouth", "chinaeast3", "chinanorth3", "indonesiacentral",
+        "malaysiawest", "newzealandnorth", "taiwannorth", "israelcentral", "mexicocentral", "greececentral",
+        "finlandcentral", "austriaeast", "belgiumcentral", "denmarkeast", "norwaysouth", "italynorth",
         "usgovvirginia", "usgovarizona", "usgovtexas", "usgoviowa")]
     [string] $location,
 
@@ -175,7 +175,7 @@ function Get-BicepVersion {
     Write-Output "Installed Bicep version: $installedVersion"
 
     # Get the latest release version from GitHub
-    $latestRelease = Invoke-RestMethod -Uri "https://api.github.com/repos/Azure/bicep/releases/latest"
+    $latestRelease = Invoke-RestMethod -Method 'Get' -Uri "https://api.github.com/repos/Azure/bicep/releases/latest"
 
     if (-not $latestRelease) {
         Write-Output "Unable to fetch the latest release."
@@ -195,7 +195,11 @@ function Get-BicepVersion {
 
         if ($response -match '^[Yy]$') {
             Write-Output "" # Required for Verbose Spacing
-            az bicep upgrade
+
+            # Download Latest Windows amd64 Bicep Executable
+            $bicepLatestUrl = ($latestRelease.assets | Where-Object 'name' -eq 'bicep-win-x64.exe').browser_download_url
+            Invoke-WebRequest -Method 'Get' -Uri $bicepLatestUrl -OutFile $env:USERPROFILE\.azure\bin\bicep.exe
+
             Write-Output "Bicep has been updated to version $latestVersion."
         }
         elseif ($response -match '^[Nn]$') {
