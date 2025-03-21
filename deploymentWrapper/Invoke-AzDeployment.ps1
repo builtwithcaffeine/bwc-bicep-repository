@@ -411,6 +411,7 @@ if ($deploy) {
         --parameters `
         location=$location `
         locationShortCode=$($locationShortCodeMap.$location) `
+        customerName=$customerName `
         environmentType=$environmentType `
         deployedBy=$azIdentityName `
         --confirm-with-what-if `
