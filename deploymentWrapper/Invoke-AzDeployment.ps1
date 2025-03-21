@@ -60,10 +60,10 @@
     Version: 2.0
 
 .EXAMPLE
-    .\Invoke-AzDeployment.ps1 -targetScope 'sub' -subscriptionId 'xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx' -environmentType 'dev' -location 'westeurope' -deploy
+    .\Invoke-AzDeployment.ps1 -targetScope 'sub' -subscriptionId 'xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx' -customerName 'bwc' -environmentType 'dev' -location 'westeurope' -deploy
 
 .EXAMPLE
-    .\Invoke-AzDeployment.ps1 -targetScope 'sub' -subscriptionId 'xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx' -environmentType 'dev' -location 'westeurope' -deploy -servicePrincipalAuthentication -spAuthCredentialFile 'C:\auth\spApp.txt'
+    .\Invoke-AzDeployment.ps1 -targetScope 'sub' -subscriptionId 'xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx' -customerName 'bwc' -environmentType 'dev' -location 'westeurope' -deploy -servicePrincipalAuthentication -spAuthCredentialFile 'C:\auth\spApp.txt'
 
 #>
 param (
@@ -76,7 +76,10 @@ param (
     [Parameter(Mandatory = $true, Position = 2, HelpMessage = "Environment Type is required")]
     [validateSet('dev', 'acc', 'prod')][string] $environmentType,
 
-    [Parameter(Mandatory = $true, Position = 3, HelpMessage = "Azure Location is required")]
+    [Parameter(Mandatory = $true, Position = 3, HelpMessage = "Customer Name")]
+    [string] $customerName,
+
+    [Parameter(Mandatory = $true, Position = 4, HelpMessage = "Azure Location is required")]
     [validateSet("eastus", "eastus2", "eastus3", "westus", "westus2", "westus3", "centralus", "northcentralus",
         "southcentralus", "westcentralus", "canadacentral", "canadaeast", "brazilsouth", "brazilseast",
         "northeurope", "westeurope", "swedencentral", "swedensouth", "francecentral", "francesouth",
@@ -90,13 +93,13 @@ param (
         "usgovvirginia", "usgovarizona", "usgovtexas", "usgoviowa")]
     [string] $location,
 
-    [Parameter(Mandatory = $false, Position = 4, HelpMessage = "Execute Infrastructure Deployment")]
+    [Parameter(Mandatory = $false, Position = 5, HelpMessage = "Execute Infrastructure Deployment")]
     [switch] $deploy,
 
-    [Parameter(Mandatory = $false, Position = 5, HelpMessage = "Execute Infrastructure Deployment")]
+    [Parameter(Mandatory = $false, Position = 6, HelpMessage = "Execute Infrastructure Deployment")]
     [switch] $servicePrincipalAuthentication,
 
-    [Parameter(Mandatory = $false, Position = 6, HelpMessage = "Service Principal Authentication File")]
+    [Parameter(Mandatory = $false, Position = 7, HelpMessage = "Service Principal Authentication File")]
     [String] $spAuthCredentialFile
 )
 
