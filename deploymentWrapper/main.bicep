@@ -9,6 +9,9 @@ param location string
 @description('Azure Location Short Code')
 param locationShortCode string
 
+@description('Customer Name')
+param customerName string
+
 @description('Environment Type')
 param environmentType string
 
@@ -25,7 +28,7 @@ param tags object = {
 //
 // Bicep Deployment Variables
 
-var resourceGroupName = 'rg-x-example-${environmentType}-${locationShortCode}'
+var resourceGroupName = 'rg-x-${customerName}-example-${environmentType}-${locationShortCode}'
 
 //
 // Azure Verified Modules - No Hard Coded Values below this line!
