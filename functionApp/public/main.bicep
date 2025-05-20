@@ -30,9 +30,9 @@ param tags object = {
 // Resource Names
 param projectName string = 'bicepbwc'
 
-var resourceGroupName = 'rg-${projectName}-${environmentType}-${locationShortCode}'
+var resourceGroupName = 'rg-x-${projectName}-${environmentType}-${locationShortCode}'
 var userManagedIdentityName = 'id-${projectName}-${environmentType}-${locationShortCode}'
-var keyvaultName = 'kv-${projectName}-${environmentType}'
+var keyvaultName = 'kv-${projectName}-${environmentType}-${locationShortCode}'
 
 param kvSoftDeleteRetentionInDays int = 7
 param kvNetworkAcls object = {
@@ -57,7 +57,6 @@ param stSkuName string = 'Standard_LRS'
 
 @allowed([
   'TLS1_2'
-  'TLS1_3'
 ])
 @description('Storage Account TLS Version')
 param stTlsVersion string = 'TLS1_2'
@@ -131,7 +130,7 @@ module createResourceGroup 'br/public:avm/res/resources/resource-group:0.4.1' = 
   }
 }
 
-module createUserManagedIdentity 'br/public:avm/res/managed-identity/user-assigned-identity:0.4.0' = {
+module createUserManagedIdentity 'br/public:avm/res/managed-identity/user-assigned-identity:0.4.1' = {
   name: 'create-userManaged-identity'
   scope: resourceGroup(resourceGroupName)
   params: {
@@ -177,7 +176,7 @@ module createKeyVault 'br/public:avm/res/key-vault/vault:0.12.1' = {
 }
 
 // [AVM Module] - Storage Account
-module createStorageAccount 'br/public:avm/res/storage/storage-account:0.18.1' = {
+module createStorageAccount 'br/public:avm/res/storage/storage-account:0.20.0' = {
   name: 'create-storage-account'
   scope: resourceGroup(resourceGroupName)
   params: {
@@ -203,7 +202,7 @@ module createStorageAccount 'br/public:avm/res/storage/storage-account:0.18.1' =
 }
 
 // [AVM Module] - Log Analytics
-module createLogAnalytics 'br/public:avm/res/operational-insights/workspace:0.11.1' = {
+module createLogAnalytics 'br/public:avm/res/operational-insights/workspace:0.11.2' = {
   name: 'create-log-analytics'
   scope: resourceGroup(resourceGroupName)
   params: {
@@ -250,7 +249,7 @@ module createAppServicePlan 'br/public:avm/res/web/serverfarm:0.4.1' = {
 }
 
 // [AVM Module] - Function App
-module createFunctionApp 'br/public:avm/res/web/site:0.15.0' = {
+module createFunctionApp 'br/public:avm/res/web/site:0.16.0' = {
   name: 'create-function-app'
   scope: resourceGroup(resourceGroupName)
   params: {
@@ -258,24 +257,14 @@ module createFunctionApp 'br/public:avm/res/web/site:0.15.0' = {
     name: functionAppName
     location: location
     httpsOnly: true
-    serverFarmResourceId: createAppServicePlan.outputs.resourceId
-    appInsightResourceId: createApplicationInsights.outputs.resourceId
-    keyVaultAccessIdentityResourceId: createUserManagedIdentity.outputs.resourceId
     storageAccountRequired: true
-    storageAccountResourceId: createStorageAccount.outputs.resourceId
+    serverFarmResourceId: createAppServicePlan.outputs.resourceId
+    keyVaultAccessIdentityResourceId: createUserManagedIdentity.outputs.resourceId
     managedIdentities: {
       systemAssigned: functionAppSystemAssignedIdentity
       userAssignedResourceIds: [
         createUserManagedIdentity.outputs.resourceId
       ]
-    }
-    appSettingsKeyValuePairs: {
-      APPLICATIONINSIGHTS_CONNECTION_STRING: createApplicationInsights.outputs.connectionString
-      WEBSITE_CONTENTAZUREFILECONNECTIONSTRING: '@Microsoft.KeyVault(VaultName=${keyvaultName};SecretName=connectionString1)'
-      WEBSITE_CONTENTSHARE: functionAppName
-      FUNCTIONS_EXTENSION_VERSION: '~4'
-      FUNCTIONS_WORKER_RUNTIME: 'powershell'
-      managedIdentityId: createUserManagedIdentity.outputs.clientId
     }
     siteConfig: {
       alwaysOn: false
@@ -300,26 +289,32 @@ module createFunctionApp 'br/public:avm/res/web/site:0.15.0' = {
         name: 'scm'
       }
     ]
-    logsConfiguration: {
-      applicationLogs: {
-        fileSystem: {
-          level: 'Verbose'
+    configs: [
+      {
+        name: 'appsettings'
+        properties:{
+          storageAccountResourceId: createStorageAccount.outputs.resourceId
+          applicationInsightResourceId: createApplicationInsights.outputs.resourceId
+          APPLICATIONINSIGHTS_CONNECTION_STRING: createApplicationInsights.outputs.connectionString
+          WEBSITE_CONTENTAZUREFILECONNECTIONSTRING: '@Microsoft.KeyVault(VaultName=${keyvaultName};SecretName=connectionString1)'
+          WEBSITE_CONTENTSHARE: functionAppName
+          FUNCTIONS_EXTENSION_VERSION: '~4'
+          FUNCTIONS_WORKER_RUNTIME: 'powershell'
+          managedIdentityId: createUserManagedIdentity.outputs.clientId
+        }
+
+      }
+      {
+        // Persisted on service in 'Monitoring/App Service logs'
+        name: 'logs'
+        properties: {
+          applicationLogs: { fileSystem: { level: 'Verbose' } }
+          detailedErrorMessages: { enabled: true }
+          failedRequestsTracing: { enabled: true }
+          httpLogs: { fileSystem: { enabled: true, retentionInDays: 1, retentionInMb: 35 } }
         }
       }
-      detailedErrorMessages: {
-        enabled: true
-      }
-      failedRequestsTracing: {
-        enabled: true
-      }
-      httpLogs: {
-        fileSystem: {
-          enabled: true
-          retentionInDays: 1
-          retentionInMb: 35
-        }
-      }
-    }
+    ]
     tags: tags
   }
   dependsOn: [
