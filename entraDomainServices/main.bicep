@@ -3,6 +3,9 @@ targetScope = 'subscription' // Please Update this based on deploymentScope Vari
 //
 // Imported Parameters
 
+@description('Customer Name')
+param customerName string
+
 @description('Azure Location')
 param location string
 
@@ -51,9 +54,11 @@ param additionalRecipients array
 //
 // Bicep Deployment Variables
 
-var resourceGroupName = 'rg-domainservices-${environmentType}-${locationShortCode}'
-var logAnalyticsWorkspaceName = 'log-domainservices-${environmentType}-${locationShortCode}'
-var virtualNetworkName = 'vnet-domainservices-${environmentType}-${locationShortCode}'
+var resourceGroupName = 'rg-${customerName}-domainservices-${environmentType}-${locationShortCode}'
+var logAnalyticsWorkspaceName = 'log-${customerName}-domainservices-${environmentType}-${locationShortCode}'
+var networkSecurityGroupName = 'nsg-${customerName}-domainservices-${environmentType}-${locationShortCode}'
+var virtualNetworkName = 'vnet-${customerName}-domainservices-${environmentType}-${locationShortCode}'
+
 var virtualNetworkConfig = {
   addressSpace: vnetAddressSpace
   subnets: [
@@ -75,7 +80,7 @@ var domainServicesConfig = {
 //
 // Azure Verified Modules
 
-module createResourceGroup 'br/public:avm/res/resources/resource-group:0.4.0' = {
+module createResourceGroup 'br/public:avm/res/resources/resource-group:0.4.1' = {
   name: 'createResourceGroup'
   params: {
     name: resourceGroupName
@@ -84,7 +89,7 @@ module createResourceGroup 'br/public:avm/res/resources/resource-group:0.4.0' = 
   }
 }
 
-module createLogAnalyticsWorkspace 'br/public:avm/res/operational-insights/workspace:0.9.1' = {
+module createLogAnalyticsWorkspace 'br/public:avm/res/operational-insights/workspace:0.11.2' = {
   name: 'createLogAnalyticsWorkspace'
   scope: resourceGroup(resourceGroupName)
   params: {
@@ -97,24 +102,24 @@ module createLogAnalyticsWorkspace 'br/public:avm/res/operational-insights/works
   ]
 }
 
-module createNetworkSecurityGroup 'br/public:avm/res/network/network-security-group:0.5.0' = {
+module createNetworkSecurityGroup 'br/public:avm/res/network/network-security-group:0.5.1' = {
   name: 'createNetworkSecurityGroup'
   scope: resourceGroup(resourceGroupName)
   params: {
-    name: 'nsg-domainservices'
+    name: networkSecurityGroupName
     location: location
     securityRules: [
       {
-        name: 'AllowSyncWithAzureAD'
+        name: 'AllowRD'
         properties: {
           protocol: 'Tcp'
           sourcePortRange: '*'
-          destinationPortRange: '443'
-          sourceAddressPrefix: '*'
-          destinationAddressPrefix: 'AzureActiveDirectoryDomainServices'
+          destinationPortRange: '3389'
+          sourceAddressPrefix: 'CorpNetSaw'
+          destinationAddressPrefix: '*'
           access: 'Allow'
           direction: 'Inbound'
-          priority: 100
+          priority: 201
         }
       }
       {
@@ -123,24 +128,11 @@ module createNetworkSecurityGroup 'br/public:avm/res/network/network-security-gr
           protocol: 'Tcp'
           sourcePortRange: '*'
           destinationPortRange: '5986'
-          sourceAddressPrefix: '*'
-          destinationAddressPrefix: 'AzureActiveDirectoryDomainServices'
+          sourceAddressPrefix: 'AzureActiveDirectoryDomainServices'
+          destinationAddressPrefix: '*'
           access: 'Allow'
           direction: 'Inbound'
-          priority: 200
-        }
-      }
-      {
-        name: 'AllowLDAPs'
-        properties: {
-          protocol: 'Tcp'
-          sourcePortRange: '*'
-          destinationPortRange: '5986'
-          sourceAddressPrefix: '*'
-          destinationAddressPrefix: 'VirtualNetwork'
-          access: 'Allow'
-          direction: 'Inbound'
-          priority: 300
+          priority: 301
         }
       }
     ]
@@ -151,7 +143,7 @@ module createNetworkSecurityGroup 'br/public:avm/res/network/network-security-gr
   ]
 }
 
-module createVirtualNetwork 'br/public:avm/res/network/virtual-network:0.5.2' = {
+module createVirtualNetwork 'br/public:avm/res/network/virtual-network:0.7.0' = {
   name: 'createVirtualNetwork'
   scope: resourceGroup(resourceGroupName)
   params: {
@@ -162,12 +154,11 @@ module createVirtualNetwork 'br/public:avm/res/network/virtual-network:0.5.2' = 
     tags: tags
   }
   dependsOn: [
-    createResourceGroup
     createNetworkSecurityGroup
   ]
 }
 
-module createEntraDomainService 'br/public:avm/res/aad/domain-service:0.3.0' = {
+module createEntraDomainService 'br/public:avm/res/aad/domain-service:0.3.2' = {
   name: 'createDomainServiceDeployment'
   scope: resourceGroup(resourceGroupName)
   params: {
@@ -205,9 +196,6 @@ module createEntraDomainService 'br/public:avm/res/aad/domain-service:0.3.0' = {
     tags: tags
   }
   dependsOn: [
-    createResourceGroup
-    createLogAnalyticsWorkspace
-    createNetworkSecurityGroup
     createVirtualNetwork
   ]
 }

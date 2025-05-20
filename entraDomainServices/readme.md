@@ -9,7 +9,7 @@
 ## Example Deployment
 
 ``` powershell
-Invoke-AzDeployment.ps1 -targetScope [tenant, mgmt, sub] -subscriptionId [azure-subscription] -environmentType [dev, acc, prod] -location [azure-location] -deploy
+Invoke-AzDeployment.ps1 -targetScope [tenant, mgmt, sub] -subscriptionId [azure-subscription] -customerName '' -environmentType [dev, acc, prod] -location [azure-location] -deploy
 ```
 
 <details closed>

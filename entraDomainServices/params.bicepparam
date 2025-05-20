@@ -2,6 +2,7 @@ using './main.bicep'
 
 // Default Values
 @description('Default Parameter Values')
+param customerName = ''
 param location = ''
 param locationShortCode = ''
 param environmentType = ''
