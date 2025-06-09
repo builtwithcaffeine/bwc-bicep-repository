@@ -149,7 +149,7 @@ function Get-AzCliVersion {
             "Y" {
                 Write-Output "Updating Azure CLI..."
                 try {
-                    az upgrade --yes
+                    az upgrade
                     Write-Output "Azure CLI has been updated to version $latestVersion."
                 } catch {
                     Write-Error "Failed to update Azure CLI. Please try updating manually."
@@ -200,7 +200,7 @@ function Get-BicepVersion {
             "Y" {
                 Write-Output "Updating Bicep CLI..."
                 try {
-                    az bicep upgrade --yes
+                    az bicep upgrade
                     Write-Output "Bicep CLI has been updated to version $latestVersion."
                 } catch {
                     Write-Error "Failed to update Bicep CLI. Please try updating manually."
