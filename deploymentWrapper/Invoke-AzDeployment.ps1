@@ -237,6 +237,7 @@ function Get-AzIdentity {
         } else {
             Write-Warning "Unknown Azure Identity Type: $($azIdentity.user.type)"
             return $null
+            break
         }
 
         # Get Role Assignments
@@ -246,6 +247,7 @@ function Get-AzIdentity {
             Write-Host "RBAC Assignments......: $($roles -join ', ')"
         } else {
             Write-Warning "No RBAC assignments found for the identity."
+            break
         }
 
         # Return Azure Identity Name
