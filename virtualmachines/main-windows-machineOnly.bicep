@@ -106,6 +106,7 @@ module createVirtualMachine 'br/public:avm/res/compute/virtual-machine:0.8.0' = 
     zone: 0
     bootDiagnostics: true
     secureBootEnabled: true
+    encryptionAtHost: true
     vTpmEnabled: true
     securityType: 'TrustedLaunch'
     imageReference: {
