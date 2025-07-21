@@ -25,6 +25,39 @@ param tags object = {
   deployedDate: utcNow('yyyy-MM-dd')
 }
 
+@description('Cloud-init configuration as a string')
+@allowed([
+  'cloudInit.yaml'
+])
+param cloudInitFile string = 'cloudInit.yaml'
+
+var cloudInitData = loadTextContent(cloudInitFile)
+
+// var cloudInitData = '''
+// #cloud-config
+// package_update: true
+// package_upgrade: true
+// packages:
+//   - nginx
+
+// runcmd:
+//   - systemctl enable nginx
+//   - systemctl start nginx
+
+// write_files:
+//   - path: /var/www/html/index.html
+//     permissions: '0644'
+//     content: |
+//       <html>
+//         <head>
+//           <title>Welcome to Nginx on Ubuntu 24.04 LTS!</title>
+//         </head>
+//         <body>
+//           <h1>It works!</h1>
+//         </body>
+//       </html>
+// '''
+
 //
 // Bicep Deployment Variables
 
@@ -53,23 +86,6 @@ param vmUserName string = 'ladm_bwcadmin'
 @secure()
 param vmUserPassword string = ''
 
-//
-// Sample cloud-init script encoded in base64
-var cloudInitData = base64('''
-#cloud-config
-package_update: true
-package_upgrade: true
-packages:
-  - nginx
-runcmd:
-  - echo "Enabling universe repo..."
-  - add-apt-repository universe
-  - apt-get update
-  - apt-get install -y nginx
-  - systemctl enable nginx
-  - systemctl start nginx
-  - echo "Nginx installed and started"
-''')
 
 
 //
@@ -93,16 +109,16 @@ module createNetworkSecurityGroup 'br/public:avm/res/network/network-security-gr
     location: location
     securityRules: [
       {
-        name: 'ALLOW_SSH_INBOUND_TCP'
+        name: 'allowOpenVPN_UDP'
         properties: {
           priority: 100
           access: 'Allow'
           direction: 'Inbound'
-          protocol: 'Tcp'
-          sourceAddressPrefix: publicIp
+          protocol: 'Udp'
+          sourceAddressPrefix: '*'
           sourcePortRange: '*'
           destinationAddressPrefix: '*'
-          destinationPortRange: '22'
+          destinationPortRange: '1194'
         }
       }
     ]
@@ -185,3 +201,4 @@ module createVirtualMachine 'br/public:avm/res/compute/virtual-machine:0.16.0' =
   ]
 }
 
+output base64CloudInitData string = cloudInitData
