@@ -439,8 +439,8 @@ if ($deploy) {
         --name iac-$deployGuid `
         --location $location `
         --template-file ./main.bicep `
+        --parameters ./main.bicepparam `
         --parameters `
-        publicIp=$publicIp `
         location=$location `
         locationShortCode=$($locationShortCodeMap.$location) `
         customerName=$customerName `

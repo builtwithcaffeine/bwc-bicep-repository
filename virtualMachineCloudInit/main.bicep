@@ -73,20 +73,21 @@ param virtualNetworkName string = 'vnet-${customerName}-linux-${locationShortCod
 @description('The Subnet Name')
 param subnetName string = 'snet-${customerName}-linux-${locationShortCode}'
 
-@description('The Public IP Address')
-param publicIp string
+@description('The Virtual Network Address Space')
+param vnetAddressSpace array
+
+@description('The Virtual Network Address Space')
+param subnetAddressPrefix string
 
 @description('The name of the virtual machine')
 param vmHostName string = 'vm-linux-01'
 
 @description('The Local User Account Name')
-param vmUserName string = 'ladm_bwcadmin'
+param vmUserName string
 
 @description('The Local User Account Password')
 @secure()
-param vmUserPassword string = ''
-
-
+param vmUserPassword string
 
 //
 // Azure Verified Modules - No Hard Coded Values below this line!
@@ -99,7 +100,6 @@ module createResourceGroup 'br/public:avm/res/resources/resource-group:0.4.1' = 
     tags: tags
   }
 }
-
 
 module createNetworkSecurityGroup 'br/public:avm/res/network/network-security-group:0.5.1' = {
   name: 'createNetworkSecurityGroup'
@@ -122,6 +122,7 @@ module createNetworkSecurityGroup 'br/public:avm/res/network/network-security-gr
         }
       }
     ]
+    tags: tags
   }
   dependsOn: [
     createResourceGroup
@@ -134,19 +135,18 @@ module createVirtualNetwork 'br/public:avm/res/network/virtual-network:0.7.0' = 
   params: {
     name: virtualNetworkName
     location: location
-    addressPrefixes: [
-      '10.0.0.0/24'
-    ]
+    addressPrefixes: vnetAddressSpace
     subnets: [
       {
         name: subnetName
-        addressPrefix: '10.0.0.0/24'
+        addressPrefix: subnetAddressPrefix
         networkSecurityGroupResourceId: createNetworkSecurityGroup.outputs.resourceId
       }
     ]
+    tags: tags
   }
   dependsOn: [
-    createResourceGroup
+    createNetworkSecurityGroup
   ]
 }
 
@@ -195,10 +195,9 @@ module createVirtualMachine 'br/public:avm/res/compute/virtual-machine:0.16.0' =
         storageAccountType: 'Premium_LRS'
       }
     }
+    tags: tags
   }
   dependsOn: [
     createVirtualNetwork
   ]
 }
-
-output base64CloudInitData string = cloudInitData

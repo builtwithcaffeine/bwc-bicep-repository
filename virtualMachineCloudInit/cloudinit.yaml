@@ -5,8 +5,19 @@ packages:
   - openvpn
   - easy-rsa
   - iptables-persistent
+  - ca-certificates
+  - curl
+  - apt-transport-https
+  - lsb-release
+  - gnupg
 
 runcmd:
+  # Install Azure CLI
+  - curl -sL https://packages.microsoft.com/keys/microsoft.asc | gpg --dearmor > /etc/apt/trusted.gpg.d/microsoft.gpg
+  - AZ_DIST=$(lsb_release -cs)
+  - echo "deb [arch=amd64 signed-by=/etc/apt/trusted.gpg.d/microsoft.gpg] https://packages.microsoft.com/repos/azure-cli/ $AZ_DIST main" > /etc/apt/sources.list.d/azure-cli.list
+  - apt-get update && apt-get install -y azure-cli
+
   # Enable IP forwarding
   - sed -i 's/^#\s*\(net\.ipv4\.ip_forward=1\)/\1/' /etc/sysctl.conf
   - sysctl -p /etc/sysctl.conf
