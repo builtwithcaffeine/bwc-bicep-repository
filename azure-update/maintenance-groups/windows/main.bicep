@@ -21,7 +21,7 @@ param virtualNetworkName string
 param subnetName string
 
 param logAnalyticsWorkspaceName string
-param linuxDataCollectionRuleName string
+param windowsDataCollectionRuleName string
 
 param vmHostName string
 param vmUserName string = 'ladm_bwcadmin'
@@ -109,14 +109,14 @@ module createLogAnalyticsWorkspace 'br/public:avm/res/operational-insights/works
   ]
 }
 
-module createLinuxDataCollectionRule 'br/public:avm/res/insights/data-collection-rule:0.4.2' = {
-  name: 'create-linux-data-collection-rule'
+module createWindowsDataCollectionRule 'br/public:avm/res/insights/data-collection-rule:0.4.2' = {
   scope: resourceGroup(resourceGroupName)
+  name: 'create-windows-data-collection-rule'
   params: {
-    name: linuxDataCollectionRuleName
+    name: windowsDataCollectionRuleName
     location: location
     dataCollectionRuleProperties: {
-      kind: 'Linux'
+      kind: 'Windows'
       description: 'Data collection rule for VM Insights.'
       dataFlows: [
         {
@@ -172,7 +172,7 @@ module createLinuxDataCollectionRule 'br/public:avm/res/insights/data-collection
     }
   }
   dependsOn: [
-    createLogAnalyticsWorkspace
+      createLogAnalyticsWorkspace
   ]
 }
 
@@ -222,7 +222,7 @@ module createVirtualMachine 'br/public:avm/res/compute/virtual-machine:0.17.0' =
     extensionMonitoringAgentConfig: {
       dataCollectionRuleAssociations: [
         {
-          dataCollectionRuleResourceId: createLinuxDataCollectionRule.outputs.resourceId
+          dataCollectionRuleResourceId: createWindowsDataCollectionRule.outputs.resourceId
           name: 'SendMetricsToLAW'
         }
       ]

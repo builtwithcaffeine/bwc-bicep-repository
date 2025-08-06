@@ -14,7 +14,7 @@ param networkSecurityGroupName = 'nsg-${customerName}-${environmentType}-${locat
 param virtualNetworkName = 'vnet-${customerName}-${environmentType}-${locationShortCode}'
 param subnetName = 'snet-${customerName}-${environmentType}-${locationShortCode}'
 param logAnalyticsWorkspaceName = 'log-${customerName}-${environmentType}-${locationShortCode}'
-param linuxDataCollectionRuleName = 'MSVMI-dcr-linux'
+param linuxDataCollectionRuleName = 'MSVMI-dcr-windows'
 
 param vmHostName = 'vm-${customerName}-${environmentType}-${locationShortCode}'
 param vmUserName = 'ladm_bwcadmin'
