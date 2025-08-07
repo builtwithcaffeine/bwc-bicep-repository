@@ -15,11 +15,11 @@ param subnetName = 'snet-${customerName}-${environmentType}-${locationShortCode}
 param logAnalyticsWorkspaceName = 'log-${customerName}-${environmentType}-${locationShortCode}'
 param linuxDataCollectionRuleName = 'MSVMI-dcr-linux'
 
-param vmHostName = 'vm-${customerName}-lin-${environmentType}-${locationShortCode}'
+param vmHostName = 'vm-${customerName}-lin-${environmentType}'
 param vmUserName = 'ladm_bwcadmin'
 param vmUserPassword = 'P@ssw0rd123!'
 
-// Custom maintenance configuration (uncomment and modify as needed)
+// Maintenance configuration for Linux VMs
 param maintenanceConfiguration = [
   {
     name: 'mc-${customerName}-${environmentType}-linux'
@@ -31,7 +31,7 @@ param maintenanceConfiguration = [
     maintenanceWindow: {
       timeZone: 'W. Europe Standard Time'
       expirationDateTime: '9999-12-31 23:59:59'
-      startDateTime: '2025-08-08 22:30'   // Custom maintenance window
+      startDateTime: '2025-08-07 17:00'   // Custom maintenance window
       duration: '04:00'                   // Extended duration
       recurEvery: 'Day'                   // Daily
     }

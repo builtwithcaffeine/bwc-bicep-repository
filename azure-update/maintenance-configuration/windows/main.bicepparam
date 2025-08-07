@@ -20,7 +20,7 @@ param vmHostName = 'vm-${customerName}-win-${environmentType}'
 param vmUserName = 'ladm_bwcadmin'
 param vmUserPassword = 'P@ssw0rd1234!'
 
-
+// Maintenance configuration for Windows VMs
 param maintenanceConfiguration = [
   {
     name: 'mc-${customerName}-${environmentType}-windows'
@@ -32,9 +32,9 @@ param maintenanceConfiguration = [
     maintenanceWindow: {
       timeZone: 'W. Europe Standard Time'
       expirationDateTime: '9999-12-31 23:59:59'
-      startDateTime: '2025-08-08 22:30'   // Custom maintenance window
+      startDateTime: '2025-08-07 17:00'   // Custom maintenance window
       duration: '04:00'                   // Extended duration
-      recurEvery: 'Day'                  // Daily
+      recurEvery: 'Day'                   // Daily
     }
     installPatches: {
       rebootSetting: 'IfRequired'

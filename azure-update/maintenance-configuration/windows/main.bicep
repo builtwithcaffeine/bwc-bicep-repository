@@ -195,7 +195,7 @@ module createVirtualMachine 'br/public:avm/res/compute/virtual-machine:0.17.0' =
     imageReference: {
       publisher: 'MicrosoftWindowsServer'
       offer: 'WindowsServer'
-      sku: '2022-datacenter-azure-edition-hotpatch'
+      sku: '2022-datacenter-azure-edition'
       version: 'latest'
     }
     nicConfigurations: [
@@ -240,9 +240,9 @@ module createMaintenanceConfiguration 'br/public:avm/res/maintenance/maintenance
   name: 'create-maintenance-configuration'
   scope: resourceGroup(resourceGroupName)
   params: {
-    name: 'mc-${customerName}-${environmentType}-windows'
+    name: maintenanceConfiguration[0].name
     location: location
-    maintenanceScope: 'InGuestPatch'
+    maintenanceScope: maintenanceConfiguration[0].maintenanceScope
     extensionProperties: maintenanceConfiguration[0].extensionProperties
     maintenanceWindow: maintenanceConfiguration[0].maintenanceWindow
     installPatches: maintenanceConfiguration[0].installPatches
