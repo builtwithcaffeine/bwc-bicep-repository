@@ -46,29 +46,4 @@ param maintenanceConfiguration = [
       }
     }
   }
-  {
-    name: 'mc-${customerName}-${environmentType}-windows'
-    location: location
-    maintenanceScope: 'InGuestPatch'
-    extensionProperties: {
-      InGuestPatchMode: 'User'
-    }
-    maintenanceWindow: {
-      timeZone: 'W. Europe Standard Time'
-      expirationDateTime: '9999-12-31 23:59:59'
-      startDateTime: '2025-08-08 02:00'  // Custom maintenance window
-      duration: '04:00'                   // Extended duration
-      recurEvery: 'Week Sunday'           // Weekly on Sunday
-    }
-    installPatches: {
-      rebootSetting: 'IfRequired'
-      windowsParameters: {
-        classificationsToInclude: [
-          'Security'
-          'Critical'
-          
-        ]
-      }
-    }
-  }
 ]
