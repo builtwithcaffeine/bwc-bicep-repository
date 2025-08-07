@@ -8,17 +8,16 @@ param locationShortCode = 'weu'
 param deployedBy = ''
 param publicIp = ''
 
-
-param resourceGroupName = 'rg-x-${customerName}-${environmentType}-${locationShortCode}'
+param resourceGroupName = 'rg-x-lin-${customerName}-${environmentType}-${locationShortCode}'
 param networkSecurityGroupName = 'nsg-${customerName}-${environmentType}-${locationShortCode}'
 param virtualNetworkName = 'vnet-${customerName}-${environmentType}-${locationShortCode}'
 param subnetName = 'snet-${customerName}-${environmentType}-${locationShortCode}'
 param logAnalyticsWorkspaceName = 'log-${customerName}-${environmentType}-${locationShortCode}'
 param linuxDataCollectionRuleName = 'MSVMI-dcr-linux'
 
-param vmHostName = 'vm-${customerName}-${environmentType}-${locationShortCode}'
+param vmHostName = 'vm-${customerName}-lin-${environmentType}-${locationShortCode}'
 param vmUserName = 'ladm_bwcadmin'
-param vmUserPassword = ''
+param vmUserPassword = 'P@ssw0rd123!'
 
 // Custom maintenance configuration (uncomment and modify as needed)
 param maintenanceConfiguration = [
@@ -32,9 +31,9 @@ param maintenanceConfiguration = [
     maintenanceWindow: {
       timeZone: 'W. Europe Standard Time'
       expirationDateTime: '9999-12-31 23:59:59'
-      startDateTime: '2025-08-08 02:00'  // Custom maintenance window
+      startDateTime: '2025-08-08 22:30'   // Custom maintenance window
       duration: '04:00'                   // Extended duration
-      recurEvery: 'Week Sunday'           // Weekly on Sunday
+      recurEvery: 'Day'                   // Daily
     }
     installPatches: {
       rebootSetting: 'IfRequired'
@@ -42,31 +41,6 @@ param maintenanceConfiguration = [
         classificationsToInclude: [
           'Security'
           'Critical'
-        ]
-      }
-    }
-  }
-  {
-    name: 'mc-${customerName}-${environmentType}-windows'
-    location: location
-    maintenanceScope: 'InGuestPatch'
-    extensionProperties: {
-      InGuestPatchMode: 'User'
-    }
-    maintenanceWindow: {
-      timeZone: 'W. Europe Standard Time'
-      expirationDateTime: '9999-12-31 23:59:59'
-      startDateTime: '2025-08-08 02:00'  // Custom maintenance window
-      duration: '04:00'                   // Extended duration
-      recurEvery: 'Week Sunday'           // Weekly on Sunday
-    }
-    installPatches: {
-      rebootSetting: 'IfRequired'
-      windowsParameters: {
-        classificationsToInclude: [
-          'Security'
-          'Critical'
-          
         ]
       }
     }

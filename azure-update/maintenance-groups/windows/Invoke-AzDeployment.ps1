@@ -293,8 +293,7 @@ function Get-AzIdentityAndRBAC {
         }
 
         # Return the identity information
-        return $azIdentityName
-
+        return $azIdentityDisplayName
     }
     catch {
         Write-Error "Failed to retrieve Azure identity or RBAC information: $_"
@@ -485,6 +484,7 @@ if ($deploy) {
         --name iac-$deployGuid `
         --location $location `
         --template-file ./main.bicep `
+        --parameters ./main.bicepparam `
         --parameters `
         location=$location `
         locationShortCode=$($locationShortCodeMap.$location) `

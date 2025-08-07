@@ -24,7 +24,7 @@ param logAnalyticsWorkspaceName string
 param linuxDataCollectionRuleName string
 
 param vmHostName string
-param vmUserName string = 'ladm_bwcadmin'
+param vmUserName string
 
 @secure()
 param vmUserPassword string

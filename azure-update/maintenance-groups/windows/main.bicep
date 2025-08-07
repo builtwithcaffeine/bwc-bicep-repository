@@ -24,7 +24,7 @@ param logAnalyticsWorkspaceName string
 param windowsDataCollectionRuleName string
 
 param vmHostName string
-param vmUserName string = 'ladm_bwcadmin'
+param vmUserName string
 
 @secure()
 param vmUserPassword string
@@ -54,7 +54,7 @@ module createNetworkSecurityGroup 'br/public:avm/res/network/network-security-gr
     location: location
     securityRules: [
       {
-        name: 'ALLOW_SSH_INBOUND_TCP'
+        name: 'ALLOW_MSRDP_INBOUND_TCP'
         properties: {
           priority: 100
           access: 'Allow'
@@ -63,7 +63,7 @@ module createNetworkSecurityGroup 'br/public:avm/res/network/network-security-gr
           sourceAddressPrefix: publicIp
           sourcePortRange: '*'
           destinationAddressPrefix: '*'
-          destinationPortRange: '22'
+          destinationPortRange: '3389'
         }
       }
     ]
@@ -184,7 +184,7 @@ module createVirtualMachine 'br/public:avm/res/compute/virtual-machine:0.17.0' =
     adminUsername: vmUserName
     adminPassword: vmUserPassword
     location: location
-    osType: 'Linux'
+    osType: 'Windows'
     vmSize: 'Standard_D2ls_v6'
     availabilityZone: -1
     bootDiagnostics: true
