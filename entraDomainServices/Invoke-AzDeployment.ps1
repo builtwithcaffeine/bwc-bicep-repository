@@ -285,7 +285,7 @@ function New-DomainControllerServices {
     Write-Host "Checking for 'AAD DC Administrators' Security Group..."
     $GroupObject = az ad group show --group "AAD DC Administrators" --query "id" -o tsv
     if (!($GroupObject)) {
-        az ad group create --display-name "AAD DC Administrators" --description "Delegated group to administer Microsoft Entra Domain Services" --mail-nickname "AADDCAdministrators" --mail-enabled false --security-enabled true --output none
+        az ad group create --display-name "AAD DC Administrators" --description "Delegated group to administer Microsoft Entra Domain Services" --mail-nickname "AADDCAdministrators" --output none
         Write-Host "'AAD DC Administrators' group created."
     }
     else {
