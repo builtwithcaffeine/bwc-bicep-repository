@@ -1,0 +1,30 @@
+controller:
+  admissionWebhooks:
+    patch:
+      nodeSelector:
+        kubernetes.io/os: linux
+  lifecycle:
+    preStop:
+      exec:
+        command:
+          - /bin/sh
+          - -c
+          - sleep 5; /usr/local/openresty/nginx/sbin/nginx -c /etc/nginx/nginx.conf
+            -s quit; while pgrep -x nginx; do sleep 1;
+  ingressClass: nginx
+  ingressClassByName: true
+  ingressClassResource:
+    controllerValue: k8s.io/nginx
+    enabled: true
+    name: nginx
+  nodeSelector:
+    kubernetes.io/os: linux
+  replicaCount: 2
+  service:
+    annotations:
+      service.beta.kubernetes.io/azure-load-balancer-health-probe-request-path: /healthz
+      service.beta.kubernetes.io/azure-load-balancer-internal: "true"
+    externalTrafficPolicy: Local
+defaultBackend:
+  nodeSelector:
+    kubernetes.io/os: linux
