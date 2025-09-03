@@ -69,10 +69,10 @@ param storageAccountName string = 'st${customerName}fxlogix${environmentType}${l
 param virtualNetworkName string = 'vnet-${customerName}-avd-${environmentType}-${locationShortCode}'
 
 var privateDnsZones = [
-  'privatelink.file.core.windows.net'
-  'privatelink.blob.core.windows.net'
-  'privatelink.table.core.windows.net'
-  'privatelink.queue.core.windows.net'
+  'privatelink.file.${environment().suffixes.storage}'
+  'privatelink.blob.${environment().suffixes.storage}'
+  'privatelink.table.${environment().suffixes.storage}'
+  'privatelink.queue.${environment().suffixes.storage}'
 ]
 
 //
@@ -344,6 +344,10 @@ module createVirtualMachine 'br/public:avm/res/compute/virtual-machine:0.18.0' =
     encryptionAtHost: true
     vTpmEnabled: true
     securityType: 'TrustedLaunch'
+    managedIdentities: {
+      // Required for Intune/Entra Domain Join
+      systemAssigned: true
+    }
     imageReference: {
       publisher: 'microsoftwindowsdesktop'
       offer: 'office-365'
@@ -375,6 +379,9 @@ module createVirtualMachine 'br/public:avm/res/compute/virtual-machine:0.18.0' =
     ]
     extensionAadJoinConfig: {
       enabled: true
+      settings: {
+        mdmId: '0000000a-0000-0000-c000-000000000000'
+      }
     }
     extensionHostPoolRegistration: {
       enabled: true
