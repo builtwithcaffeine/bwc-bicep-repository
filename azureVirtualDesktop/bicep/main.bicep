@@ -151,22 +151,22 @@ module createEntraDomainNetworkSecurityGroup 'br/public:avm/res/network/network-
 }
 
 module createAvdNetworkSecurityGroup 'br/public:avm/res/network/network-security-group:0.5.1' = {
- name: 'create-avd-network-security-group'
- scope: resourceGroup(resourceGroupName)
- params:{
-  name: 'nsg-${customerName}-avd-${environmentType}-${locationShortCode}'
- }
-dependsOn: [
+  name: 'create-avd-network-security-group'
+  scope: resourceGroup(resourceGroupName)
+  params: {
+    name: 'nsg-${customerName}-avd-${environmentType}-${locationShortCode}'
+  }
+  dependsOn: [
     createResourceGroup
   ]
 }
 
 module createPrivateEndPointNetworkSecurityGroup 'br/public:avm/res/network/network-security-group:0.5.1' = {
- name: 'create-private-endpoint-network-security-group'
- scope: resourceGroup(resourceGroupName)
- params:{
-  name: 'nsg-${customerName}-pe-${environmentType}-${locationShortCode}'
- }
+  name: 'create-private-endpoint-network-security-group'
+  scope: resourceGroup(resourceGroupName)
+  params: {
+    name: 'nsg-${customerName}-pe-${environmentType}-${locationShortCode}'
+  }
   dependsOn: [
     createResourceGroup
   ]
@@ -210,27 +210,27 @@ module createVirtualNetwork 'br/public:avm/res/network/virtual-network:0.7.0' = 
   ]
 }
 
-
-module createPrivateDnsZones 'br/public:avm/res/network/private-dns-zone:0.8.0' = [for zone in privateDnsZones: {
-  name: 'create-zone-${zone}'
-  scope: resourceGroup(resourceGroupName)
-  params: {
-    name: zone
-    location: 'global'
-    virtualNetworkLinks: [
-      {
-        name: 'link-${zone}-${customerName}-${environmentType}-${locationShortCode}'
-        registrationEnabled: false
-        virtualNetworkResourceId: createVirtualNetwork.outputs.resourceId
-      }
+module createPrivateDnsZones 'br/public:avm/res/network/private-dns-zone:0.8.0' = [
+  for zone in privateDnsZones: {
+    name: 'create-zone-${zone}'
+    scope: resourceGroup(resourceGroupName)
+    params: {
+      name: zone
+      location: 'global'
+      virtualNetworkLinks: [
+        {
+          name: 'link-${zone}-${customerName}-${environmentType}-${locationShortCode}'
+          registrationEnabled: false
+          virtualNetworkResourceId: createVirtualNetwork.outputs.resourceId
+        }
+      ]
+      tags: tags
+    }
+    dependsOn: [
+      createVirtualNetwork
     ]
-    tags: tags
   }
-  dependsOn: [
-    createVirtualNetwork
-  ]
-}]
-
+]
 
 module createEntraDomainServices 'br/public:avm/res/aad/domain-service:0.4.1' = {
   name: 'create-entra-domain-services'
@@ -258,7 +258,6 @@ module createEntraDomainServices 'br/public:avm/res/aad/domain-service:0.4.1' = 
   ]
 }
 
-
 module createStorageAccountFxLogix 'br/public:avm/res/storage/storage-account:0.26.2' = {
   name: 'create-storage-account-fxlogix'
   scope: resourceGroup(resourceGroupName)
@@ -273,7 +272,7 @@ module createStorageAccountFxLogix 'br/public:avm/res/storage/storage-account:0.
       defaultAction: 'Allow'
     }
     privateEndpoints: [
-    {
+      {
         privateDnsZoneGroup: {
           privateDnsZoneGroupConfigs: [
             {
@@ -329,7 +328,7 @@ module createAVDWorkspace 'br/public:avm/res/desktop-virtualization/workspace:0.
 }
 
 module createVirtualMachine 'br/public:avm/res/compute/virtual-machine:0.18.0' = {
-    name: 'create-virtual-machine'
+  name: 'create-virtual-machine'
   scope: resourceGroup(resourceGroupName)
   params: {
     name: vmHostName
@@ -379,9 +378,10 @@ module createVirtualMachine 'br/public:avm/res/compute/virtual-machine:0.18.0' =
     ]
     extensionAadJoinConfig: {
       enabled: true
-      settings: {
-        mdmId: '0000000a-0000-0000-c000-000000000000'
-      }
+      // settings: {
+      // Setting for Enable Intune Device Registration
+      //   mdmId: '0000000a-0000-0000-c000-000000000000'
+      // }
     }
     extensionHostPoolRegistration: {
       enabled: true
