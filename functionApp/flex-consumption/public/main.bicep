@@ -1,28 +1,47 @@
 targetScope = 'subscription'
 
+@description('Customer Name')
 param customerName string = 'bicep'
 
+@description('Environment Type')
+@allowed(['dev', 'acc', 'prod'])
 param environmentType string = 'dev'
 
+@description('Azure Location')
 param location string = 'westeurope'
 
+@description('Azure Location Short Code')
 param locationShortCode string = 'weu'
 
 //
 // Resource Names
 
+@description('Resource Names')
 param resourceGroupName string = 'rg-${customerName}-hugo-${environmentType}-${locationShortCode}'
+
+@description('Managed Identity Name')
 param managedIdentityName string = 'id-${customerName}-${environmentType}-${locationShortCode}'
+
+@description('Storage Account Name')
 param storageAccountName string = 'st${customerName}hugo${environmentType}${locationShortCode}'
+
+@description('Log Analytics Workspace Name')
 param logAnalyticsName string = 'log-${customerName}-hugo-${environmentType}-${locationShortCode}'
+
+@description('Application Insights Name')
 param applicationInsightsName string = 'appi-${customerName}-hugo-${environmentType}-${locationShortCode}'
+
+@description('App Service Plan Name')
 param appServicePlanName string = 'asp-${customerName}-hugo-${environmentType}-${locationShortCode}'
+
+@description('Function App Name')
 param functionAppName string = 'func-${customerName}-hugo-${environmentType}-${locationShortCode}'
 
 //
 // Azure Verified Modules
 //
 
+@description('Create Resource Group')
 module createResourceGroup 'br/public:avm/res/resources/resource-group:0.4.2' = {
   name: 'create-resource-group'
   params: {
@@ -31,6 +50,7 @@ module createResourceGroup 'br/public:avm/res/resources/resource-group:0.4.2' = 
   }
 }
 
+@description('Create User Managed Identity')
 module createUserManagedIdentity 'br/public:avm/res/managed-identity/user-assigned-identity:0.4.2' = {
   name: 'create-user-managed-identity'
   scope: resourceGroup(resourceGroupName)
@@ -43,6 +63,7 @@ module createUserManagedIdentity 'br/public:avm/res/managed-identity/user-assign
   ]
 }
 
+@description('Create Storage Account')
 module createStorageAccount 'br/public:avm/res/storage/storage-account:0.27.1' = {
   name: 'create-storage-account'
   scope: resourceGroup(resourceGroupName)
@@ -52,6 +73,9 @@ module createStorageAccount 'br/public:avm/res/storage/storage-account:0.27.1' =
     skuName: 'Standard_LRS'
     kind: 'StorageV2'
     accessTier: 'Hot'
+    allowSharedKeyAccess: false
+    requireInfrastructureEncryption: true
+    supportsHttpsTrafficOnly: true
     minimumTlsVersion: 'TLS1_2'
     publicNetworkAccess: 'Enabled'
     networkAcls: {
@@ -82,7 +106,7 @@ module createStorageAccount 'br/public:avm/res/storage/storage-account:0.27.1' =
             }
           ]
         }
-       {
+        {
           name: 'azure-webjobs-secrets'
           publicAccess: 'None'
           roleAssignments: [
@@ -101,11 +125,12 @@ module createStorageAccount 'br/public:avm/res/storage/storage-account:0.27.1' =
   ]
 }
 
+@description('Assign Role Based Authentication for User Managed Identity')
 module storageBlobOwnerRoleAssignment 'br/public:avm/ptn/authorization/resource-role-assignment:0.1.2' = {
   name: 'storage-blob-owner-role-assignment'
   scope: resourceGroup(resourceGroupName)
   params: {
-    roleDefinitionId: '/providers/Microsoft.Authorization/roleDefinitions/ba92f5b4-2d11-453d-a403-e96b0029c9fe' // Storage Blob Data Owner
+    roleDefinitionId: '/providers/Microsoft.Authorization/roleDefinitions/ba92f5b4-2d11-453d-a403-e96b0029c9fe' // Storage Blob Data Contributor
     resourceId: createStorageAccount.outputs.resourceId
     principalType: 'ServicePrincipal'
     principalId: createUserManagedIdentity.outputs.principalId
@@ -115,6 +140,7 @@ module storageBlobOwnerRoleAssignment 'br/public:avm/ptn/authorization/resource-
   ]
 }
 
+@description('Create Log Analytics Workspace')
 module createLogAnalytics 'br/public:avm/res/operational-insights/workspace:0.12.0' = {
   name: 'create-log-analytics'
   scope: resourceGroup(resourceGroupName)
@@ -129,6 +155,7 @@ module createLogAnalytics 'br/public:avm/res/operational-insights/workspace:0.12
   ]
 }
 
+@description('Create Application Insights')
 module createApplicationInsights 'br/public:avm/res/insights/component:0.6.0' = {
   name: 'create-application-insights'
   scope: resourceGroup(resourceGroupName)
@@ -150,6 +177,7 @@ module createApplicationInsights 'br/public:avm/res/insights/component:0.6.0' = 
   ]
 }
 
+@description('Create App Service Plan - Flexible Consumption')
 module createAppServicePlan 'br/public:avm/res/web/serverfarm:0.5.0' = {
   name: 'create-app-service-plan'
   scope: resourceGroup(resourceGroupName)
@@ -165,6 +193,7 @@ module createAppServicePlan 'br/public:avm/res/web/serverfarm:0.5.0' = {
   ]
 }
 
+@description('Create Function App')
 module createFunctionApp 'br/public:avm/res/web/site:0.19.3' = {
   name: 'create-function-app'
   scope: resourceGroup(resourceGroupName)
