@@ -80,7 +80,7 @@ var domainServicesConfig = {
 //
 // Azure Verified Modules
 
-module createResourceGroup 'br/public:avm/res/resources/resource-group:0.4.1' = {
+module createResourceGroup 'br/public:avm/res/resources/resource-group:0.4.2' = {
   name: 'createResourceGroup'
   params: {
     name: resourceGroupName
@@ -89,12 +89,14 @@ module createResourceGroup 'br/public:avm/res/resources/resource-group:0.4.1' = 
   }
 }
 
-module createLogAnalyticsWorkspace 'br/public:avm/res/operational-insights/workspace:0.11.2' = {
+module createLogAnalyticsWorkspace 'br/public:avm/res/operational-insights/workspace:0.12.0' = {
   name: 'createLogAnalyticsWorkspace'
   scope: resourceGroup(resourceGroupName)
   params: {
     name: logAnalyticsWorkspaceName
     location: location
+    skuName: 'PerGB2018'
+    dataRetention: 90
     tags: tags
   }
   dependsOn: [
@@ -102,7 +104,7 @@ module createLogAnalyticsWorkspace 'br/public:avm/res/operational-insights/works
   ]
 }
 
-module createNetworkSecurityGroup 'br/public:avm/res/network/network-security-group:0.5.1' = {
+module createNetworkSecurityGroup 'br/public:avm/res/network/network-security-group:0.5.2' = {
   name: 'createNetworkSecurityGroup'
   scope: resourceGroup(resourceGroupName)
   params: {
@@ -143,7 +145,7 @@ module createNetworkSecurityGroup 'br/public:avm/res/network/network-security-gr
   ]
 }
 
-module createVirtualNetwork 'br/public:avm/res/network/virtual-network:0.7.0' = {
+module createVirtualNetwork 'br/public:avm/res/network/virtual-network:0.7.1' = {
   name: 'createVirtualNetwork'
   scope: resourceGroup(resourceGroupName)
   params: {
@@ -158,7 +160,7 @@ module createVirtualNetwork 'br/public:avm/res/network/virtual-network:0.7.0' = 
   ]
 }
 
-module createEntraDomainService 'br/public:avm/res/aad/domain-service:0.3.2' = {
+module createEntraDomainService 'br/public:avm/res/aad/domain-service:0.5.0' = {
   name: 'createDomainServiceDeployment'
   scope: resourceGroup(resourceGroupName)
   params: {
