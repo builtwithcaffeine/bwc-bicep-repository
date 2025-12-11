@@ -28,7 +28,7 @@ param tags object = {
 //
 // Bicep Deployment Variables
 
-param resourceGroupName string = 'rg-x-${customerName}--image-shared-${environmentType}'
+param resourceGroupName string = 'rg-x-${customerName}-image-shared-${environmentType}'
 param virtualNetworkName string = 'vnet-${customerName}-image-build-${environmentType}'
 param storageAccountName string = 'st${customerName}imagebuild${environmentType}'
 param managedIdentityName string = 'id-${customerName}-image-build-${environmentType}'
@@ -48,7 +48,7 @@ var imageTemplates = [
         securityType: 'TrustedLaunch'
       }
       {
-        name: 'img-windows-server-2025-datacenter'
+        name: 'img-windows-11-24h2-avd-m365'
         identifier: {
           publisher: 'MicrosoftWindowsDesktop'
           offer: 'office-365'
