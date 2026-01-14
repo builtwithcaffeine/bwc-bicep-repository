@@ -218,46 +218,112 @@ function Get-BicepVersion {
 
 # Get Azure User/Service Principal Identity
 function Get-AzIdentity {
+    param (
+        [Parameter(Mandatory = $true)]
+        [string] $SubscriptionId
+    )
+
     try {
         # Get Identity Type
         $azIdentity = az account show --output json | ConvertFrom-Json
+        $identityType = $azIdentity.user.type
+        $signedInPrincipal = $azIdentity.user.name
+        $azIdentityObjectId = $null
 
-        if ($azIdentity.user.type -eq 'servicePrincipal') {
-            $spDisplayName = az ad sp show --id $azIdentity.user.name --query 'displayName' -o tsv
+        if ($identityType -eq 'servicePrincipal') {
+            $spDetails = az ad sp show --id $signedInPrincipal --output json | ConvertFrom-Json
+            $spDisplayName = $spDetails.displayName
+            $azIdentityObjectId = $spDetails.id
 
             Write-Host "Azure Identity Type...: Service Principal"
             Write-Host "Service Principal.....: $spDisplayName"
             $azIdentityName = $spDisplayName
 
-        } elseif ($azIdentity.user.type -eq 'user') {
-            $azUserAccountName = $azIdentity.user.name
+        }
+        elseif ($identityType -eq 'user') {
+            $userDetails = az ad signed-in-user show --output json | ConvertFrom-Json
+            $azUserAccountName = $signedInPrincipal
+            $azIdentityObjectId = $userDetails.id
+            $userDisplayName = if ($userDetails.displayName) { $userDetails.displayName } else { $azUserAccountName }
             Write-Host "Azure Identity Type...: User"
             Write-Host "User Account Email....: $azUserAccountName"
-            $azIdentityName = $azUserAccountName
-        } else {
-            Write-Warning "Unknown Azure Identity Type: $($azIdentity.user.type)"
+            Write-Host "Display Name..........: $userDisplayName"
+            $azIdentityName = $userDisplayName
+        }
+        else {
+            Write-Warning "Unknown Azure Identity Type: $identityType"
             return $null
-            break
         }
 
         # Get Role Assignments
-        $rbacAssignments = az role assignment list --assignee $azIdentity.user.name --output json | ConvertFrom-Json
+        $rbacAssignments = az role assignment list --assignee $signedInPrincipal --include-groups --include-inherited --output json 2>$null | ConvertFrom-Json
         if ($rbacAssignments) {
             $roles = $rbacAssignments | Select-Object -ExpandProperty roleDefinitionName -Unique
             Write-Host "RBAC Assignments......: $($roles -join ', ')"
-        } else {
+        }
+        else {
             Write-Warning "No RBAC assignments found for the identity."
-            break
+            return $azIdentityName
+        }
+
+        # Evaluate Owner-scoped group memberships (subscription level only)
+        if ($identityType -eq 'user' -and $azIdentityObjectId) {
+            $subscriptionScope = "/subscriptions/$SubscriptionId"
+            $ownerAssignments = az role assignment list --role "Owner" --scope $subscriptionScope --output json 2>$null | ConvertFrom-Json
+
+            if ($ownerAssignments) {
+                $directOwnerAssignments = $ownerAssignments | Where-Object { $_.principalId -eq $azIdentityObjectId }
+                if ($directOwnerAssignments) {
+                    Write-Host "Role Assignment.......: Direct assignment detected at: $subscriptionScope"
+                }
+
+                $ownerGroups = $ownerAssignments |
+                    Where-Object { $_.principalType -eq 'Group' } |
+                    Sort-Object -Property principalId -Unique
+
+                $membershipMatches = @()
+                if ($ownerGroups) {
+                    foreach ($group in $ownerGroups) {
+                        $groupId = $group.principalId
+                        if (-not $groupId) { continue }
+                        $membershipResult = az ad group member check --group $groupId --member-id $azIdentityObjectId --query value -o tsv 2>$null
+                        if ($membershipResult -and $membershipResult.Trim().ToLower() -eq 'true') {
+                            $membershipMatches += $group.principalName
+                        }
+                    }
+
+                    if ($membershipMatches.Count -gt 0) {
+                        Write-Host "Group Membership: $($membershipMatches -join ', ')"
+                    }
+                }
+
+                if (-not $directOwnerAssignments -and $membershipMatches.Count -eq 0) {
+                    if ($ownerGroups) {
+                        Write-Warning "Identity is not a member of any Owner-scoped groups at $subscriptionScope."
+                    }
+                    else {
+                        Write-Warning "No Owner role assignments backed by groups were found at $subscriptionScope."
+                    }
+                }
+            }
+            else {
+                Write-Warning "Unable to retrieve Owner role assignments at $subscriptionScope."
+            }
+        }
+        elseif ($identityType -eq 'servicePrincipal') {
+            Write-Host "Skipping Owner group membership check for service principals."
         }
 
         # Return Azure Identity Name
         return $azIdentityName
 
-    } catch {
+    }
+    catch {
         Write-Error "Failed to retrieve Azure identity information: $_"
         return $null
     }
 }
+
 
 # Generate Random Password
 function New-RandomPassword {
@@ -413,7 +479,11 @@ if (!$servicePrincipalAuthentication) {
 }
 
 # Get Azure Identity, Required for Deployment Tags (DeployedBy:)
-$azIdentityName = Get-AzIdentity
+$azIdentityName = Get-AzIdentity -SubscriptionId $subscriptionId
+if (-not $azIdentityName) {
+    Write-Error "Unable to determine Azure identity and/or insufficient RBAC permissions. Exiting."
+    exit 1
+}
 
 # Change Azure Subscription
 Write-Output `r "Updating Azure Subscription context to $subscriptionId"
