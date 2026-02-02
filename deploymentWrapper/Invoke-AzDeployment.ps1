@@ -248,7 +248,7 @@ function Get-AzIdentity {
             Write-Host "Azure Identity Type...: User"
             Write-Host "User Account Email....: $azUserAccountName"
             Write-Host "Display Name..........: $userDisplayName"
-            $azIdentityName = $userDisplayName
+            $azIdentityName = $azUserAccountName
         }
         else {
             Write-Warning "Unknown Azure Identity Type: $identityType"
