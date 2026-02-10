@@ -174,35 +174,40 @@ module createManagedIdentityRunAks 'br/public:avm/res/managed-identity/user-assi
 }
 
 // Create Azure Kubernetes Cluster
-module createAzureKubernetesCluster 'br/public:avm/res/container-service/managed-cluster:0.10.1' = {
+module createAzureKubernetesCluster 'br/public:avm/res/container-service/managed-cluster:0.12.0' = {
   name: 'create-azure-kubernetes-cluster'
   scope: resourceGroup(resourceGroupName)
   params: {
-    name: 'aks-${customerName}-${environmentType}-${locationShortCode}'
+    name: aksClusterName
     location: location
     skuName: 'Base'
     skuTier: 'Standard'
-    kubernetesVersion: '1.31'
+    kubernetesVersion: '1.34'
     networkPlugin: 'azure'
     networkPolicy: 'azure'
+    networkDataplane: 'cilium'
     outboundType: 'loadBalancer'
     loadBalancerSku: 'standard'
-    disableRunCommand: false
     enableKeyvaultSecretsProvider: true
     enableSecretRotation: true
-    enableContainerInsights: true
     monitoringWorkspaceResourceId: createLogAnalyticsWorkspace.outputs.resourceId
     disableLocalAccounts: true
-    enablePrivateCluster: false
-    publicNetworkAccess: 'Enabled'
     enableOidcIssuerProfile: true
-    enableWorkloadIdentity: true
+    publicNetworkAccess: 'Enabled'
+    apiServerAccessProfile: {
+      enablePrivateCluster: false
+      enablePrivateClusterPublicFQDN: false
+    }
+    securityProfile: {
+      workloadIdentity: {
+        enabled: true
+      }
+    }
     aadProfile: {
-      aadProfileManaged: true
-      aadProfileEnableAzureRBAC: true
-      aadProfileAdminGroupObjectIDs: [
-        aksAdminsGroupId
-      ]
+      enableAzureRBAC: true
+      managed: true
+      adminGroupObjectIDs: aksAdminsGroupObjectIds
+      tenantID: subscription().tenantId
     }
     managedIdentities: {
       userAssignedResourceIds: [
@@ -211,14 +216,18 @@ module createAzureKubernetesCluster 'br/public:avm/res/container-service/managed
     }
     primaryAgentPoolProfiles: [
       {
-        name: 'system'
+        name: 'systemPool'
         mode: 'System'
         count: 1
-        vmSize: 'Standard_DS2_v2'
+        vmSize: 'Standard_D2ls_v6'
         osType: 'Linux'
         osSKU: 'AzureLinux'
         enableEncryptionAtHost: true
-        //vnetSubnetResourceId: createVirtualNetwork.outputs.subnetResourceIds[0]
+        securityProfile: {
+          enableSecureBoot: true
+          enableVTPM: true
+        }
+        vnetSubnetResourceId: createVirtualNetwork.outputs.subnetResourceIds[2]
         nodeLabels: {
           nodetype: 'system'
         }
@@ -229,14 +238,18 @@ module createAzureKubernetesCluster 'br/public:avm/res/container-service/managed
     ]
     agentPools: [
       {
-        name: 'user'
+        name: 'workloadPool'
         mode: 'User'
-        count: 2
-        vmSize: 'Standard_DS2_v2'
+        count: 1
+        vmSize: 'Standard_D2ls_v6'
         osType: 'Linux'
         osSKU: 'AzureLinux'
         enableEncryptionAtHost: true
-        //vnetSubnetResourceId: createVirtualNetwork.outputs.subnetResourceIds[0]
+        securityProfile: {
+          enableSecureBoot: true
+          enableVTPM: true
+        }
+        vnetSubnetResourceId: createVirtualNetwork.outputs.subnetResourceIds[2]
         nodeLabels: {
           nodetype: 'user'
         }
