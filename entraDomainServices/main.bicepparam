@@ -1,7 +1,6 @@
 using './main.bicep'
 
 // Default Values
-@description('Default Parameter Values')
 param customerName = ''
 param location = ''
 param locationShortCode = ''
@@ -9,31 +8,27 @@ param environmentType = ''
 param deployedBy = ''
 
 
-// Virtual Network
-@description('The name of the virtual network to be created.')
+// Virtual Network - Address Space
 param vnetAddressSpace = [
   '192.168.0.0/24'
 ]
 
-@description('The name of the subnet to be created.')
+// Virtual Network - Subnet Address Space
 param subnetAddressPrefix = '192.168.0.0/24'
 
 // Entra Id Domain Services
-@description('The name of the domain to be created.')
 param domainName = 'ad.builtwithcaffeine.cloud'
 
-@description('The name of the resource to be created.')
+// Entra Domain Services Resource Name
 // NOTE: Character Limit is: 19
 param resourceName = 'builtwithcaffeine'
 
-@description('Domain Services Sku')
-@allowed([
-  'Standard'
-  'Premium'
-])
+// Entra Domain Services Skus
+// Standard
+// Premium
 param domainServicesSku = 'Standard'
 
-@description('Additional recipients for notifications.')
+// Entra Domain Services - Additional Recipients for Alerts
 param additionalRecipients = [
   'alerts@builtwithcaffeine.cloud'
 ]

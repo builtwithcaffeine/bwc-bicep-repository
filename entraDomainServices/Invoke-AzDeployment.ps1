@@ -1,71 +1,68 @@
 <#
 .SYNOPSIS
-    This script deploys Azure resources using Bicep templates and Azure CLI.
+    Deploys Azure Bicep templates for Entra Domain Services with support for user or service principal authentication, pre-flight checks, and environment tagging.
 
 .DESCRIPTION
-    The script performs the following tasks:
-    - Validates and sets parameters for deployment.
-    - Checks and updates Azure CLI and Bicep CLI versions.
-    - Authenticates with Azure using either user or service principal credentials.
-    - Retrieves Azure identity information.
-    - Generates a random password.
-    - Maps Azure location short codes.
-    - Creates a deployment GUID for tracking.
-    - Deploys the Bicep template to the specified target scope.
+    This script automates the deployment of Azure resources using Bicep templates. It performs pre-flight checks for Azure CLI and Bicep CLI versions, validates user or service principal authentication, ensures required Azure AD applications and groups exist, and deploys infrastructure based on provided parameters. It supports multiple Azure regions and environment types, and tags deployments with relevant metadata.
 
 .PARAMETER targetScope
-    The target scope for the deployment. Valid values are 'tenant', 'mgmt', and 'sub'.
+    The deployment scope. Accepts 'tenant', 'mgmt', or 'sub'.
 
 .PARAMETER subscriptionId
-    The Azure Subscription ID. Must be a 36-character string.
+    The Azure Subscription ID (GUID format, 36 characters).
 
 .PARAMETER environmentType
-    The environment type for the deployment. Valid values are 'dev', 'acc', and 'prod'.
+    The environment type for deployment. Accepts 'dev', 'acc', or 'prod'.
+
+.PARAMETER customerName
+    The customer name for tagging and resource naming.
 
 .PARAMETER location
-    The Azure location for the deployment. Must be one of the specified Azure regions.
+    The Azure region/location for deployment. Must be one of the supported Azure locations.
 
 .PARAMETER deploy
-    Switch to execute the infrastructure deployment.
+    Switch to execute the infrastructure deployment. If not specified, the script performs pre-flight checks only.
 
 .PARAMETER servicePrincipalAuthentication
-    Switch to use service principal authentication.
+    Switch to use service principal authentication instead of user authentication.
 
 .PARAMETER spAuthCredentialFile
-    Path to the service principal authentication file.
+    Path to a JSON file containing service principal credentials (spAppId, spAppSecret, spTenantId).
 
-    JSON File Example:
+.FUNCTIONS
+    Get-AzCliVersion
+        Checks if Azure CLI is installed and up to date.
 
-    {
-        "spAppId": "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx",
-        "spAppSecret": "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx",
-        "spTenantId": "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
-    }
+    Get-BicepVersion
+        Checks if Bicep CLI is installed and up to date.
 
-.FUNCTION Get-AzCliVersion
-    Checks if Azure CLI is installed and updates it if a new version is available.
+    Get-AzIdentity
+        Retrieves the current Azure identity (user or service principal) and validates RBAC assignments.
 
-.FUNCTION Get-BicepVersion
-    Checks if Bicep CLI is installed and updates it if a new version is available.
+    New-RandomPassword
+        Generates a random password with configurable length and non-alphanumeric character count.
 
-.FUNCTION Get-AzIdentity
-    Retrieves Azure identity information and role assignments.
-
-.FUNCTION New-RandomPassword
-    Generates a random password with a specified length and number of non-alphanumeric characters.
+    New-EntraIdADDSEnterpriseApplication
+        Ensures the required Entra ID Enterprise Application and 'AAD DC Administrators' group exist.
 
 .NOTES
-    Author: Simon Lee (BuiltWithCaffeine)
-    Date: 2025-03-17
-    Version: 2.0
+    - Requires Azure CLI and Bicep CLI.
+    - Requires appropriate Azure RBAC permissions for deployment.
+    - Supports both user and service principal authentication.
+    - Designed for use in automated CI/CD or manual deployment scenarios.
 
 .EXAMPLE
-    .\Invoke-AzDeployment.ps1 -targetScope 'sub' -subscriptionId 'xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx' -environmentType 'dev' -location 'westeurope' -deploy
+    .\Invoke-AzDeployment.ps1 -targetScope sub -subscriptionId <GUID> -environmentType dev -customerName Contoso -location eastus -deploy
+
+    Deploys the Bicep template to the specified subscription and location for the 'dev' environment.
 
 .EXAMPLE
-    .\Invoke-AzDeployment.ps1 -targetScope 'sub' -subscriptionId 'xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx' -environmentType 'dev' -location 'westeurope' -deploy -servicePrincipalAuthentication -spAuthCredentialFile 'C:\auth\spApp.txt'
+    .\Invoke-AzDeployment.ps1 -targetScope sub -subscriptionId <GUID> -environmentType prod -customerName Fabrikam -location westeurope -deploy -servicePrincipalAuthentication -spAuthCredentialFile .\spAuth.json
+
+    Deploys using service principal authentication with credentials from a JSON file.
 
 #>
+
 param (
     [Parameter(Mandatory = $true, Position = 0, HelpMessage = "Deployment Guid is required")]
     [validateSet('tenant', 'mgmt', 'sub')] [string] $targetScope,
@@ -73,30 +70,31 @@ param (
     [Parameter(Mandatory = $true, Position = 1, HelpMessage = "Azure Subscription Id is required")]
     [ValidateLength(36, 36)] [string] $subscriptionId,
 
-    [Parameter(Mandatory = $true, Position = 2, HelpMessage = "Customer Name is required")]
-    [string] $customerName,
-
-    [Parameter(Mandatory = $true, Position = 3, HelpMessage = "Environment Type is required")]
+    [Parameter(Mandatory = $true, Position = 2, HelpMessage = "Environment Type is required")]
     [validateSet('dev', 'acc', 'prod')][string] $environmentType,
 
+    [Parameter(Mandatory = $true, Position = 3, HelpMessage = "Customer Name")]
+    [string] $customerName,
+
     [Parameter(Mandatory = $true, Position = 4, HelpMessage = "Azure Location is required")]
-    [validateSet("eastus", "eastus2", "eastus3", "westus", "westus2", "westus3", "centralus", "northcentralus", 
-        "southcentralus", "westcentralus", "canadacentral", "canadaeast", "brazilsouth", "brazilseast", 
-        "northeurope", "westeurope", "swedencentral", "swedensouth", "francecentral", "francesouth", 
-        "germanywestcentral", "germanynorth", "switzerlandnorth", "switzerlandwest", "norwayeast", "norwaywest", 
-        "polandcentral", "spaincentral", "qatarcentral", "uaenorth", "uaecentral", "southafricanorth", 
-        "southafricawest", "southafricaeast", "eastasia", "southeastasia", "japaneast", "japanwest", 
-        "australiaeast", "australiasoutheast", "australiacentral", "australiacentral2", "centralindia", 
-        "southindia", "westindia", "koreacentral", "koreasouth", "chinaeast3", "chinanorth3", "indonesiacentral", 
-        "malaysiawest", "newzealandnorth", "taiwannorth", "israelcentral", "mexicocentral", "greececentral", 
-        "finlandcentral", "austriaeast", "belgiumcentral", "denmarkeast", "norwaysouth", "italynorth", 
-        "usgovvirginia", "usgovarizona", "usgovtexas", "usgoviowa")]
+    [validateSet("eastus", "eastus2", "eastus3", "westus", "westus2", "westus3", "centralus", "northcentralus",
+        "southcentralus", "westcentralus", "canadacentral", "canadaeast", "brazilsouth", "brazilseast",
+        "northeurope", "westeurope", "swedencentral", "swedensouth", "francecentral", "francesouth",
+        "germanywestcentral", "germanynorth", "switzerlandnorth", "switzerlandwest", "norwayeast", "norwaywest",
+        "polandcentral", "spaincentral", "qatarcentral", "uaenorth", "uaecentral", "southafricanorth",
+        "southafricawest", "southafricaeast", "eastasia", "southeastasia", "japaneast", "japanwest",
+        "australiaeast", "australiasoutheast", "australiacentral", "australiacentral2", "centralindia",
+        "southindia", "westindia", "koreacentral", "koreasouth", "chinaeast3", "chinanorth3", "indonesiacentral",
+        "malaysiawest", "newzealandnorth", "taiwannorth", "israelcentral", "mexicocentral", "greececentral",
+        "finlandcentral", "austriaeast", "belgiumcentral", "denmarkeast", "norwaysouth", "italynorth",
+        "usgovvirginia", "usgovarizona", "usgovtexas", "usgoviowa", "switzerlandeast", "germanysouth",
+        "francewest", "japancentral", "koreacentral2", "australiawest", "brazilwest", "canadawest")]
     [string] $location,
 
     [Parameter(Mandatory = $false, Position = 5, HelpMessage = "Execute Infrastructure Deployment")]
     [switch] $deploy,
 
-    [Parameter(Mandatory = $false, Position = 6, HelpMessage = "Execute Infrastructure Deployment")]
+    [Parameter(Mandatory = $false, Position = 6, HelpMessage = "Use Service Principal Authentication")]
     [switch] $servicePrincipalAuthentication,
 
     [Parameter(Mandatory = $false, Position = 7, HelpMessage = "Service Principal Authentication File")]
@@ -115,8 +113,7 @@ function Get-AzCliVersion {
         exit 1
     }
 
-    # Verbose Output
-    Write-Output `r "Checking for Azure CLI..."
+    Write-Output "Checking for Azure CLI..."
 
     # Get the installed version of Azure CLI
     $installedVersion = az version --output json | ConvertFrom-Json | Select-Object -ExpandProperty azure-cli
@@ -129,14 +126,14 @@ function Get-AzCliVersion {
     Write-Output "Installed Azure CLI version: $installedVersion"
 
     # Get the latest release version from GitHub
-    $latestRelease = Invoke-RestMethod -Uri "https://api.github.com/repos/Azure/azure-cli/releases/latest"
-
-    if (-not $latestRelease) {
-        Write-Output "Unable to fetch the latest release."
+    try {
+        $latestRelease = Invoke-RestMethod -Uri "https://api.github.com/repos/Azure/azure-cli/releases/latest"
+        $latestVersion = $latestRelease.tag_name.TrimStart('azure-cli-')  # GitHub version starts with 'azure-cli-'
+    }
+    catch {
+        Write-Warning "Unable to fetch the latest release. Ensure you have internet connectivity."
         return
     }
-
-    $latestVersion = $latestRelease.tag_name.TrimStart('azure-cli-')  # GitHub version starts with 'azure-cli-'
 
     # Compare versions
     if ($installedVersion -eq $latestVersion) {
@@ -144,19 +141,25 @@ function Get-AzCliVersion {
     }
     else {
         Write-Output "A new version of Azure CLI is available. Latest Release is: $latestVersion."
-        # Prompt for user input (Yes/No)
         $response = Read-Host "Do you want to update? (Y/N)"
 
-        if ($response -match '^[Yy]$') {
-            Write-Output "" # Required for Verbose Spacing
-            az upgrade
-            Write-Output "Azure CLI has been updated to version $latestVersion."
-        }
-        elseif ($response -match '^[Nn]$') {
-            Write-Output "Update canceled."
-        }
-        else {
-            Write-Output "Invalid response. Please answer with Y or N."
+        switch ($response.ToUpper()) {
+            "Y" {
+                Write-Output "Updating Azure CLI..."
+                try {
+                    az upgrade
+                    Write-Output "Azure CLI has been updated to version $latestVersion."
+                }
+                catch {
+                    Write-Error "Failed to update Azure CLI. Please try updating manually."
+                }
+            }
+            "N" {
+                Write-Output "Update canceled."
+            }
+            default {
+                Write-Output "Invalid response. Please answer with Y or N."
+            }
         }
     }
 }
@@ -164,83 +167,193 @@ function Get-AzCliVersion {
 # Function - Get-BicepVersion
 function Get-BicepVersion {
 
-    #
     Write-Output `r "Checking for Bicep CLI..."
 
-    # Get the installed version of Bicep
-    $installedVersion = az bicep version --only-show-errors | Select-String -Pattern 'Bicep CLI version (\d+\.\d+\.\d+)' | ForEach-Object { $_.Matches.Groups[1].Value }
-
-    if (-not $installedVersion) {
-        Write-Output "Bicep CLI is not installed or version couldn't be determined."
+    # Check if Bicep CLI is installed
+    try {
+        $installedVersion = az bicep version --only-show-errors | Select-String -Pattern 'Bicep CLI version (\d+\.\d+\.\d+)' | ForEach-Object { $_.Matches.Groups[1].Value }
+    }
+    catch {
+        Write-Warning "Bicep CLI is not installed. Please install it using 'az bicep install'."
         return
     }
 
     Write-Output "Installed Bicep version: $installedVersion"
 
     # Get the latest release version from GitHub
-    $latestRelease = Invoke-RestMethod -Uri "https://api.github.com/repos/Azure/bicep/releases/latest"
-
-    if (-not $latestRelease) {
-        Write-Output "Unable to fetch the latest release."
+    try {
+        $latestRelease = Invoke-RestMethod -Uri "https://api.github.com/repos/Azure/bicep/releases/latest"
+        $latestVersion = $latestRelease.tag_name.TrimStart('v')  # GitHub version starts with 'v'
+    }
+    catch {
+        Write-Warning "Unable to fetch the latest release. Ensure you have internet connectivity."
         return
     }
 
-    $latestVersion = $latestRelease.tag_name.TrimStart('v')  # GitHub version starts with 'v'
-
     # Compare versions
     if ($installedVersion -eq $latestVersion) {
-        Write-Output "Bicep is up to date."
+        Write-Output "Bicep CLI is up to date."
     }
     else {
-        Write-Output "A new version of Bicep is available. Latest Release is: $latestVersion."
-        # Prompt for user input (Yes/No)
+        Write-Output "A new version of Bicep CLI is available. Latest Release: $latestVersion."
         $response = Read-Host "Do you want to update? (Y/N)"
 
-        if ($response -match '^[Yy]$') {
-            Write-Output "" # Required for Verbose Spacing
-            az bicep upgrade
-            Write-Output "Bicep has been updated to version $latestVersion."
-        }
-        elseif ($response -match '^[Nn]$') {
-            Write-Output "Update canceled."
-        }
-        else {
-            Write-Output "Invalid response. Please answer with Y or N."
+        switch ($response.ToUpper()) {
+            "Y" {
+                Write-Output "Updating Bicep CLI..."
+                try {
+                    az bicep upgrade
+                    Write-Output "Bicep CLI has been updated to version $latestVersion."
+                }
+                catch {
+                    Write-Error "Failed to update Bicep CLI. Please try updating manually."
+                }
+            }
+            "N" {
+                Write-Output "Update canceled."
+            }
+            default {
+                Write-Output "Invalid response. Please answer with Y or N."
+            }
         }
     }
 }
 
 # Get Azure User/Service Principal Identity
 function Get-AzIdentity {
-    # Get Identity Type
-    $azIdentity = az account show | ConvertFrom-Json
+    param (
+        [Parameter(Mandatory = $true)]
+        [string] $SubscriptionId
+    )
 
-    if ($azIdentity.user.type -eq 'servicePrincipal') {
-        $spDisplayName = az ad sp show --id (az account show --query 'user.name' -o 'tsv') --query 'displayName' -o 'tsv'
+    try {
+        # Get Identity Type
+        $azIdentity = az account show --output json | ConvertFrom-Json
+        $identityType = $azIdentity.user.type
+        $signedInPrincipal = $azIdentity.user.name
+        $azIdentityObjectId = $null
+
+        if ($identityType -eq 'servicePrincipal') {
+            $spDetails = az ad sp show --id $signedInPrincipal --output json | ConvertFrom-Json
+            $spDisplayName = $spDetails.displayName
+            $azIdentityObjectId = $spDetails.id
+
+            Write-Host "Azure Identity Type...: Service Principal"
+            Write-Host "Service Principal.....: $spDisplayName"
+            $azIdentityName = $spDisplayName
+
+        }
+        elseif ($identityType -eq 'user') {
+            $userDetails = az ad signed-in-user show --output json | ConvertFrom-Json
+            $azUserAccountName = $signedInPrincipal
+            $azIdentityObjectId = $userDetails.id
+            $userDisplayName = if ($userDetails.displayName) { $userDetails.displayName } else { $azUserAccountName }
+            Write-Host "Azure Identity Type...: User"
+            Write-Host "User Account Email....: $azUserAccountName"
+            Write-Host "Display Name..........: $userDisplayName"
+            $azIdentityName = $azUserAccountName
+        }
+        else {
+            Write-Warning "Unknown Azure Identity Type: $identityType"
+            return $null
+        }
+
+        # Get Role Assignments
+        $rbacAssignments = az role assignment list --assignee $signedInPrincipal --include-groups --include-inherited --output json 2>$null | ConvertFrom-Json
+        if ($rbacAssignments) {
+            $roles = $rbacAssignments | Select-Object -ExpandProperty roleDefinitionName -Unique
+            Write-Host "RBAC Assignments......: $($roles -join ', ')"
+        }
+        else {
+            Write-Warning "No RBAC assignments found for the identity."
+            return $azIdentityName
+        }
+
+        # Evaluate Owner-scoped group memberships (subscription level only)
+        if ($identityType -eq 'user' -and $azIdentityObjectId) {
+            $subscriptionScope = "/subscriptions/$SubscriptionId"
+            $ownerAssignments = az role assignment list --role "Owner" --scope $subscriptionScope --output json 2>$null | ConvertFrom-Json
+
+            if ($ownerAssignments) {
+                $directOwnerAssignments = $ownerAssignments | Where-Object { $_.principalId -eq $azIdentityObjectId }
+                if ($directOwnerAssignments) {
+                    Write-Host "Role Assignment.......: Direct assignment detected at: $subscriptionScope"
+                }
+
+                $ownerGroups = $ownerAssignments |
+                Where-Object { $_.principalType -eq 'Group' } |
+                Sort-Object -Property principalId -Unique
+
+                $membershipMatches = @()
+                if ($ownerGroups) {
+                    foreach ($group in $ownerGroups) {
+                        $groupId = $group.principalId
+                        if (-not $groupId) { continue }
+                        $membershipResult = az ad group member check --group $groupId --member-id $azIdentityObjectId --query value -o tsv 2>$null
+                        if ($membershipResult -and $membershipResult.Trim().ToLower() -eq 'true') {
+                            $membershipMatches += $group.principalName
+                        }
+                    }
+
+                    if ($membershipMatches.Count -gt 0) {
+                        Write-Host "Group Membership: $($membershipMatches -join ', ')"
+                    }
+                }
+
+                if (-not $directOwnerAssignments -and $membershipMatches.Count -eq 0) {
+                    if ($ownerGroups) {
+                        Write-Warning "Identity is not a member of any Owner-scoped groups at $subscriptionScope."
+                    }
+                    else {
+                        Write-Warning "No Owner role assignments backed by groups were found at $subscriptionScope."
+                    }
+                }
+            }
+            else {
+                Write-Warning "Unable to retrieve Owner role assignments at $subscriptionScope."
+            }
+        }
+        elseif ($identityType -eq 'servicePrincipal') {
+            Write-Host "Skipping Owner group membership check for service principals."
+        }
+
+        # Return Azure Identity Name
+        return $azIdentityName
+
+    }
+    catch {
+        Write-Error "Failed to retrieve Azure identity information: $_"
+        return $null
+    }
+}
+
+
+# Generate Random Password
+function New-RandomPassword {
+    param (
+        [Parameter(Mandatory)]
+        [ValidateRange(8, 128)] # Ensure password length is within a reasonable range
+        [int] $length,
+
+        [ValidateRange(0, 128)] # Ensure non-alphanumeric count is valid
+        [int] $amountOfNonAlphanumeric = 2
+    )
+
+    if ($amountOfNonAlphanumeric -gt $length) {
+        throw "The number of non-alphanumeric characters cannot exceed the total password length."
     }
 
-    if ($azIdentity.user.type -eq 'user') {
-        $azUserAccountName = az account show --query 'user.name' -o 'tsv'
-    }
+    $nonAlphaNumericChars = '!@$#%^&*()_-+=[{]};:<>|./?'
+    $alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789'
 
-    Write-Host "Azure Identity Information:"
-    Write-Host "Identity Type.........: $($azIdentity.user.type)"
-    if ($azIdentity.user.type -eq 'servicePrincipal') {
-        Write-Host "Service Principal.....: $spDisplayName"
-        $azIdentityName = $spDisplayName
-    }
+    # Generate non-alphanumeric and alphanumeric parts
+    $nonAlphaNumericPart = -join ((1..$amountOfNonAlphanumeric | ForEach-Object { $nonAlphaNumericChars | Get-Random }))
+    $alphabetPart = -join ((1..($length - $amountOfNonAlphanumeric) | ForEach-Object { $alphabet | Get-Random }))
 
-    if ($azIdentity.user.type -eq 'user') {
-        Write-Host "User Account Email....: $azUserAccountName"
-        $azIdentityName = $azUserAccountName
-    }
+    # Combine and shuffle the password
+    $password = ($alphabetPart + $nonAlphaNumericPart).ToCharArray() | Sort-Object { Get-Random }
 
-    # Get Role Base Assignments
-    $rbacAssignment = az role assignment list --assignee $azIdentity.user.name --output json | ConvertFrom-Json
-    Write-Host "RBAC Assignment.......: $($rbacAssignment.RoleDefinitionName)"
-
-    # Return Azure Identity Value
-    return $azIdentityName
+    return -join $password
 }
 
 # Generate Random Password
@@ -262,9 +375,9 @@ function New-RandomPassword {
     return -join $password
 }
 
-function New-DomainControllerServices {
+function New-EntraIdADDSEnterpriseApplication {
     # Create Enterprise Application - 'Domain Controller Services'
-    Write-Host "Checking for 'Domain Controller Services' Enterprise Application..."
+    Write-Host "Checking for 'ADDS Domain Controller Services' Enterprise Application..."
 
     # Check if the Enterprise App exists
     $appId = "2565bd9d-da50-47d4-8b85-4c97f669dc36"
@@ -324,18 +437,23 @@ $locationShortCodeMap = @{
     "canadaeast"         = "cane"
     "brazilsouth"        = "brs"
     "brazilseast"        = "bre"
+    "brazilwest"         = "brw"
     "northeurope"        = "neu"
     "westeurope"         = "weu"
     "swedencentral"      = "sec"
     "swedensouth"        = "ses"
     "francecentral"      = "frc"
     "francesouth"        = "frs"
+    "francewest"         = "frw"
     "germanywestcentral" = "gwc"
     "germanynorth"       = "gn"
+    "germanysouth"       = "gs"
     "switzerlandnorth"   = "chn"
     "switzerlandwest"    = "chw"
+    "switzerlandeast"    = "che"
     "norwayeast"         = "noe"
     "norwaywest"         = "now"
+    "norwaysouth"        = "nos"
     "polandcentral"      = "plc"
     "spaincentral"       = "spc"
     "qatarcentral"       = "qtc"
@@ -348,15 +466,18 @@ $locationShortCodeMap = @{
     "southeastasia"      = "sea"
     "japaneast"          = "jpe"
     "japanwest"          = "jpw"
+    "japancentral"       = "jpc"
     "australiaeast"      = "aue"
     "australiasoutheast" = "ause"
     "australiacentral"   = "auc"
     "australiacentral2"  = "auc2"
+    "australiawest"      = "auw"
     "centralindia"       = "cin"
     "southindia"         = "sin"
     "westindia"          = "win"
     "koreacentral"       = "korc"
     "koreasouth"         = "kors"
+    "koreacentral2"      = "korc2"
     "chinaeast3"         = "ce3"
     "chinanorth3"        = "cn3"
     "indonesiacentral"   = "idc"
@@ -370,7 +491,6 @@ $locationShortCodeMap = @{
     "austriaeast"        = "ate"
     "belgiumcentral"     = "bec"
     "denmarkeast"        = "dke"
-    "norwaysouth"        = "nos"
     "italynorth"         = "itn"
     "usgovvirginia"      = "usgv"
     "usgovarizona"       = "usga"
@@ -427,14 +547,19 @@ if (!$servicePrincipalAuthentication) {
 }
 
 # Get Azure Identity, Required for Deployment Tags (DeployedBy:)
-$azIdentityName = Get-AzIdentity
+$azIdentityName = Get-AzIdentity -SubscriptionId $subscriptionId
+if (-not $azIdentityName) {
+    Write-Error "Unable to determine Azure identity and/or insufficient RBAC permissions. Exiting."
+    exit 1
+}
 
 # Change Azure Subscription
-Write-Output `r "Updating Azure Subscription context to $subscriptionId" `r
+Write-Output `r "Updating Azure Subscription context to $subscriptionId"
 az account set --subscription $subscriptionId --output none
 
 # Check and Create Domain Controller Services
-New-DomainControllerServices
+New-EntraIdADDSEnterpriseApplication
+
 
 Write-Output `r "Pre Flight Variable Validation:"
 Write-Output "Deployment Guid......: $deployGuid"
@@ -453,11 +578,11 @@ if ($deploy) {
         --name iac-$deployGuid `
         --location $location `
         --template-file ./main.bicep `
-        --parameters ./params.bicepparam `
+        --parameters ./main.bicepparam `
         --parameters `
-        customerName=$customerName `
         location=$location `
         locationShortCode=$($locationShortCodeMap.$location) `
+        customerName=$customerName `
         environmentType=$environmentType `
         deployedBy=$azIdentityName `
         --confirm-with-what-if `
@@ -466,4 +591,5 @@ if ($deploy) {
     $deployEndTime = Get-Date -Format 'HH:mm:ss'
     $timeDifference = New-TimeSpan -Start $deployStartTime -End $deployEndTime ; $deploymentDuration = "{0:hh\:mm\:ss}" -f $timeDifference
     Write-Output `r "> Deployment [$azDeployGuidLink] Started at $deployEndTime - Deployment Duration: $deploymentDuration"
+
 }
