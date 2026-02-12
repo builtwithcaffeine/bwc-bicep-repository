@@ -80,7 +80,7 @@ var domainServicesConfig = {
 //
 // Azure Verified Modules
 
-module createResourceGroup 'br/public:avm/res/resources/resource-group:0.4.2' = {
+module createResourceGroup 'br/public:avm/res/resources/resource-group:0.4.3' = {
   name: 'createResourceGroup'
   params: {
     name: resourceGroupName
@@ -89,7 +89,7 @@ module createResourceGroup 'br/public:avm/res/resources/resource-group:0.4.2' = 
   }
 }
 
-module createLogAnalyticsWorkspace 'br/public:avm/res/operational-insights/workspace:0.12.0' = {
+module createLogAnalyticsWorkspace 'br/public:avm/res/operational-insights/workspace:0.15.0' = {
   name: 'createLogAnalyticsWorkspace'
   scope: resourceGroup(resourceGroupName)
   params: {
@@ -145,7 +145,7 @@ module createNetworkSecurityGroup 'br/public:avm/res/network/network-security-gr
   ]
 }
 
-module createVirtualNetwork 'br/public:avm/res/network/virtual-network:0.7.1' = {
+module createVirtualNetwork 'br/public:avm/res/network/virtual-network:0.7.2' = {
   name: 'createVirtualNetwork'
   scope: resourceGroup(resourceGroupName)
   params: {
@@ -160,7 +160,7 @@ module createVirtualNetwork 'br/public:avm/res/network/virtual-network:0.7.1' = 
   ]
 }
 
-module createEntraDomainService 'br/public:avm/res/aad/domain-service:0.5.0' = {
+module createEntraDomainService 'br/public:avm/res/aad/domain-service:0.6.0' = {
   name: 'createDomainServiceDeployment'
   scope: resourceGroup(resourceGroupName)
   params: {
@@ -191,7 +191,7 @@ module createEntraDomainService 'br/public:avm/res/aad/domain-service:0.5.0' = {
             category: 'AllMetrics'
           }
         ]
-        name: 'customSetting'
+        name: 'SendToLogAnalyticsWorkspace'
         workspaceResourceId: createLogAnalyticsWorkspace.outputs.resourceId
       }
     ]
