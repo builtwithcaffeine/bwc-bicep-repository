@@ -208,8 +208,8 @@ module createAzureContainerInstance 'br/public:avm/res/container-instance/contai
           image: containerInstanceImage
           resources: {
             requests: {
-              cpu: 2
-              memoryInGB: '1'
+              cpu: 1
+              memoryInGB: '0.5'
             }
           }
           ports: [
