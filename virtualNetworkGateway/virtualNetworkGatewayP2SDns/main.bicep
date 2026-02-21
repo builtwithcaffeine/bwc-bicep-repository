@@ -82,8 +82,7 @@ param virtualNetworkSettings object = {
     }
     {
       name: 'snet-resource'
-      addressPrefix: '10.0.0.80/26'
-      delegation: 'Microsoft.ContainerInstance/containerGroups'
+      addressPrefix: '10.0.0.80/28'
     }
   ]
 }
@@ -146,26 +145,26 @@ module createVirtualNetwork 'br/public:avm/res/network/virtual-network:0.7.2' = 
   ]
 }
 
-module createVirtualNetworkGateway 'br/public:avm/res/network/virtual-network-gateway:0.10.1' = {
-  name: 'create-virtual-network-gateway'
-  scope: resourceGroup(resourceGroupName)
-  params: {
-    name: virtualNetworkGatewayName
-    location: location
-    gatewayType: 'Vpn'
-    skuName: 'VpnGw1AZ'
-    clusterSettings: {
-      clusterMode: 'activePassiveNoBgp'
-    }
-    virtualNetworkResourceId: createVirtualNetwork.outputs.resourceId
-    publicIpAvailabilityZones: [1, 2, 3]
-    vpnClientAadConfiguration: virtualNetworkGatewaySettings.vpnClientAadConfiguration
-    tags: tags
-  }
-  dependsOn: [
-    createVirtualNetwork
-  ]
-}
+// module createVirtualNetworkGateway 'br/public:avm/res/network/virtual-network-gateway:0.10.1' = {
+//   name: 'create-virtual-network-gateway'
+//   scope: resourceGroup(resourceGroupName)
+//   params: {
+//     name: virtualNetworkGatewayName
+//     location: location
+//     gatewayType: 'Vpn'
+//     skuName: 'VpnGw1AZ'
+//     clusterSettings: {
+//       clusterMode: 'activePassiveNoBgp'
+//     }
+//     virtualNetworkResourceId: createVirtualNetwork.outputs.resourceId
+//     publicIpAvailabilityZones: [1, 2, 3]
+//     vpnClientAadConfiguration: virtualNetworkGatewaySettings.vpnClientAadConfiguration
+//     tags: tags
+//   }
+//   dependsOn: [
+//     createVirtualNetwork
+//   ]
+// }
 
 module createAzurePrivateDnsResolver 'br/public:avm/res/network/dns-resolver:0.5.6' = if (enableCreateAzurePrivateDnsResolver) {
   name: 'create-azure-dns-resolver'
