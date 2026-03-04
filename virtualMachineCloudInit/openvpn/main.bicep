@@ -80,7 +80,9 @@ param vnetAddressSpace array
 param subnetAddressPrefix string
 
 @description('The name of the virtual machine')
-param vmHostName string = 'vm-linux-01'
+param openVpnHostName string = 'vm-${customerName}-openvpn-${environmentType}'
+
+param clientHostName string = 'vm-${customerName}-client-${environmentType}'
 
 @description('The Local User Account Name')
 param vmUserName string
@@ -166,16 +168,16 @@ module createVirtualNetwork 'br/public:avm/res/network/virtual-network:0.7.2' = 
   ]
 }
 
-module createVirtualMachine 'br/public:avm/res/compute/virtual-machine:0.21.0' = {
-  name: 'create-virtual-machine'
+module createOpenVPNVirtualMachine 'br/public:avm/res/compute/virtual-machine:0.21.0' = {
+  name: 'create-openvpn-virtual-machine'
   scope: resourceGroup(resourceGroupName)
   params: {
-    name: vmHostName
+    name: openVpnHostName
     adminUsername: vmUserName
     adminPassword: vmUserPassword
     location: location
     osType: 'Linux'
-    vmSize: 'Standard_D2als_v6'
+    vmSize: 'Standard_D2ls_v6'
     customData: cloudInitData
     availabilityZone: 1
     bootDiagnostics: true
@@ -195,7 +197,7 @@ module createVirtualMachine 'br/public:avm/res/compute/virtual-machine:0.21.0' =
           {
             name: 'ipconfig01'
             pipConfiguration: {
-              name: '${vmHostName}-pip-01'
+              name: '${openVpnHostName}-pip-01'
             }
             subnetResourceId: createVirtualNetwork.outputs.subnetResourceIds[0]
           }
@@ -203,6 +205,56 @@ module createVirtualMachine 'br/public:avm/res/compute/virtual-machine:0.21.0' =
         nicSuffix: '-nic-01'
         enableAcceleratedNetworking: true
         enableIPForwarding: true
+      }
+    ]
+    osDisk: {
+      caching: 'ReadWrite'
+      diskSizeGB: 128
+      managedDisk: {
+        storageAccountType: 'Premium_LRS'
+      }
+    }
+    tags: tags
+  }
+  dependsOn: [
+    createVirtualNetwork
+  ]
+}
+
+module createClientVirtualMachine 'br/public:avm/res/compute/virtual-machine:0.21.0' = {
+  name: 'create-client-virtual-machine'
+  scope: resourceGroup(resourceGroupName)
+  params: {
+    name: clientHostName
+    computerName: 'client01'
+    adminUsername: vmUserName
+    adminPassword: vmUserPassword
+    location: location
+    osType: 'Windows'
+    vmSize: 'Standard_D2ls_v6'
+    customData: cloudInitData
+    availabilityZone: 1
+    bootDiagnostics: true
+    secureBootEnabled: true
+    encryptionAtHost: true
+    vTpmEnabled: true
+    securityType: 'TrustedLaunch'
+    imageReference: {
+      publisher: 'MicrosoftWindowsServer'
+      offer: 'WindowsServer'
+      sku: '2025-datacenter-azure-edition'
+      version: 'latest'
+    }
+    nicConfigurations: [
+      {
+        ipConfigurations: [
+          {
+            name: 'ipconfig01'
+            subnetResourceId: createVirtualNetwork.outputs.subnetResourceIds[0]
+          }
+        ]
+        nicSuffix: '-nic-01'
+        enableAcceleratedNetworking: true
       }
     ]
     osDisk: {

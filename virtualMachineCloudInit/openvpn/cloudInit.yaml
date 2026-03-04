@@ -44,6 +44,7 @@ runcmd:
   # Create required directories
   - mkdir -p /etc/openvpn/ccd
   - mkdir -p /var/log/openvpn
+  - touch /etc/openvpn/routes.conf
 
   # Write server.conf
   - |
@@ -146,7 +147,7 @@ runcmd:
     # without AEAD support (OpenVPN 2.3.x or older)
     # This adds AES-256-CBC as fallback cipher and
     # keeps the modern ciphers as well.
-    ; data-ciphers AES-256-GCM:AES-128-GCM:?CHACHA20-POLY1305:AES-256-CBC
+    data-ciphers AES-256-GCM:AES-128-GCM:?CHACHA20-POLY1305:AES-256-CBC
 
     # Network topology
     # Should be subnet (addressing via IP)
@@ -216,7 +217,9 @@ runcmd:
     # also has a small subnet behind his connecting
     # machine, such as 192.168.40.128/255.255.255.248.
     # First, uncomment out these lines:
-    ; client-config-dir ccd
+    client-config-dir ccd
+    config /etc/openvpn/routes.conf
+
     ; route 192.168.40.128 255.255.255.248
     # Then create a file ccd/Thelonious with this line:
     #   iroute 192.168.40.128 255.255.255.248
@@ -305,7 +308,7 @@ runcmd:
     # a copy of this key.
     # The second parameter should be '0'
     # on the server and '1' on the clients.
-    ; tls-auth ta.key 0 # This file is secret
+    tls-auth ta.key 0 # This file is secret
 
     # The maximum number of concurrently connected
     # clients we want to allow.
@@ -316,8 +319,8 @@ runcmd:
     #
     # You can uncomment this on non-Windows
     # systems after creating a dedicated user.
-    ; user openvpn
-    ; group openvpn
+    user openvpn
+    group openvpn
 
     # The persist options will try to avoid
     # accessing certain resources on restart
@@ -338,7 +341,7 @@ runcmd:
     # "log" will truncate the log file on OpenVPN startup,
     # while "log-append" will append to it.  Use one
     # or the other (but not both).
-    ; log         /var/log/openvpn/openvpn.log
+    log         /var/log/openvpn/openvpn.log
     ; log-append  /var/log/openvpn/openvpn.log
 
     # Set the appropriate level of log
