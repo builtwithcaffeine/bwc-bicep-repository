@@ -133,7 +133,8 @@ function Get-AzCliVersion {
     try {
         $latestRelease = Invoke-RestMethod -Uri "https://api.github.com/repos/Azure/azure-cli/releases/latest"
         $latestVersion = $latestRelease.tag_name.TrimStart('azure-cli-')  # GitHub version starts with 'azure-cli-'
-    } catch {
+    }
+    catch {
         Write-Warning "Unable to fetch the latest release. Ensure you have internet connectivity."
         return
     }
@@ -141,7 +142,8 @@ function Get-AzCliVersion {
     # Compare versions
     if ($installedVersion -eq $latestVersion) {
         Write-Output "Azure CLI is up to date."
-    } else {
+    }
+    else {
         Write-Output "A new version of Azure CLI is available. Latest Release is: $latestVersion."
         $response = Read-Host "Do you want to update? (Y/N)"
 
@@ -151,7 +153,8 @@ function Get-AzCliVersion {
                 try {
                     az upgrade
                     Write-Output "Azure CLI has been updated to version $latestVersion."
-                } catch {
+                }
+                catch {
                     Write-Error "Failed to update Azure CLI. Please try updating manually."
                 }
             }
@@ -173,7 +176,8 @@ function Get-BicepVersion {
     # Check if Bicep CLI is installed
     try {
         $installedVersion = az bicep version --only-show-errors | Select-String -Pattern 'Bicep CLI version (\d+\.\d+\.\d+)' | ForEach-Object { $_.Matches.Groups[1].Value }
-    } catch {
+    }
+    catch {
         Write-Warning "Bicep CLI is not installed. Please install it using 'az bicep install'."
         return
     }
@@ -184,7 +188,8 @@ function Get-BicepVersion {
     try {
         $latestRelease = Invoke-RestMethod -Uri "https://api.github.com/repos/Azure/bicep/releases/latest"
         $latestVersion = $latestRelease.tag_name.TrimStart('v')  # GitHub version starts with 'v'
-    } catch {
+    }
+    catch {
         Write-Warning "Unable to fetch the latest release. Ensure you have internet connectivity."
         return
     }
@@ -192,7 +197,8 @@ function Get-BicepVersion {
     # Compare versions
     if ($installedVersion -eq $latestVersion) {
         Write-Output "Bicep CLI is up to date."
-    } else {
+    }
+    else {
         Write-Output "A new version of Bicep CLI is available. Latest Release: $latestVersion."
         $response = Read-Host "Do you want to update? (Y/N)"
 
@@ -202,7 +208,8 @@ function Get-BicepVersion {
                 try {
                     az bicep upgrade
                     Write-Output "Bicep CLI has been updated to version $latestVersion."
-                } catch {
+                }
+                catch {
                     Write-Error "Failed to update Bicep CLI. Please try updating manually."
                 }
             }
@@ -218,46 +225,112 @@ function Get-BicepVersion {
 
 # Get Azure User/Service Principal Identity
 function Get-AzIdentity {
+    param (
+        [Parameter(Mandatory = $true)]
+        [string] $SubscriptionId
+    )
+
     try {
         # Get Identity Type
         $azIdentity = az account show --output json | ConvertFrom-Json
+        $identityType = $azIdentity.user.type
+        $signedInPrincipal = $azIdentity.user.name
+        $azIdentityObjectId = $null
 
-        if ($azIdentity.user.type -eq 'servicePrincipal') {
-            $spDisplayName = az ad sp show --id $azIdentity.user.name --query 'displayName' -o tsv
+        if ($identityType -eq 'servicePrincipal') {
+            $spDetails = az ad sp show --id $signedInPrincipal --output json | ConvertFrom-Json
+            $spDisplayName = $spDetails.displayName
+            $azIdentityObjectId = $spDetails.id
 
             Write-Host "Azure Identity Type...: Service Principal"
             Write-Host "Service Principal.....: $spDisplayName"
             $azIdentityName = $spDisplayName
 
-        } elseif ($azIdentity.user.type -eq 'user') {
-            $azUserAccountName = $azIdentity.user.name
+        }
+        elseif ($identityType -eq 'user') {
+            $userDetails = az ad signed-in-user show --output json | ConvertFrom-Json
+            $azUserAccountName = $signedInPrincipal
+            $azIdentityObjectId = $userDetails.id
+            $userDisplayName = if ($userDetails.displayName) { $userDetails.displayName } else { $azUserAccountName }
             Write-Host "Azure Identity Type...: User"
             Write-Host "User Account Email....: $azUserAccountName"
+            Write-Host "Display Name..........: $userDisplayName"
             $azIdentityName = $azUserAccountName
-        } else {
-            Write-Warning "Unknown Azure Identity Type: $($azIdentity.user.type)"
+        }
+        else {
+            Write-Warning "Unknown Azure Identity Type: $identityType"
             return $null
-            break
         }
 
         # Get Role Assignments
-        $rbacAssignments = az role assignment list --assignee $azIdentity.user.name --output json | ConvertFrom-Json
+        $rbacAssignments = az role assignment list --assignee $signedInPrincipal --include-groups --include-inherited --output json 2>$null | ConvertFrom-Json
         if ($rbacAssignments) {
             $roles = $rbacAssignments | Select-Object -ExpandProperty roleDefinitionName -Unique
             Write-Host "RBAC Assignments......: $($roles -join ', ')"
-        } else {
+        }
+        else {
             Write-Warning "No RBAC assignments found for the identity."
-            break
+            return $azIdentityName
+        }
+
+        # Evaluate Owner-scoped group memberships (subscription level only)
+        if ($identityType -eq 'user' -and $azIdentityObjectId) {
+            $subscriptionScope = "/subscriptions/$SubscriptionId"
+            $ownerAssignments = az role assignment list --role "Owner" --scope $subscriptionScope --output json 2>$null | ConvertFrom-Json
+
+            if ($ownerAssignments) {
+                $directOwnerAssignments = $ownerAssignments | Where-Object { $_.principalId -eq $azIdentityObjectId }
+                if ($directOwnerAssignments) {
+                    Write-Host "Role Assignment.......: Direct assignment detected at: $subscriptionScope"
+                }
+
+                $ownerGroups = $ownerAssignments |
+                Where-Object { $_.principalType -eq 'Group' } |
+                Sort-Object -Property principalId -Unique
+
+                $membershipMatches = @()
+                if ($ownerGroups) {
+                    foreach ($group in $ownerGroups) {
+                        $groupId = $group.principalId
+                        if (-not $groupId) { continue }
+                        $membershipResult = az ad group member check --group $groupId --member-id $azIdentityObjectId --query value -o tsv 2>$null
+                        if ($membershipResult -and $membershipResult.Trim().ToLower() -eq 'true') {
+                            $membershipMatches += $group.principalName
+                        }
+                    }
+
+                    if ($membershipMatches.Count -gt 0) {
+                        Write-Host "Group Membership: $($membershipMatches -join ', ')"
+                    }
+                }
+
+                if (-not $directOwnerAssignments -and $membershipMatches.Count -eq 0) {
+                    if ($ownerGroups) {
+                        Write-Warning "Identity is not a member of any Owner-scoped groups at $subscriptionScope."
+                    }
+                    else {
+                        Write-Warning "No Owner role assignments backed by groups were found at $subscriptionScope."
+                    }
+                }
+            }
+            else {
+                Write-Warning "Unable to retrieve Owner role assignments at $subscriptionScope."
+            }
+        }
+        elseif ($identityType -eq 'servicePrincipal') {
+            Write-Host "Skipping Owner group membership check for service principals."
         }
 
         # Return Azure Identity Name
         return $azIdentityName
 
-    } catch {
+    }
+    catch {
         Write-Error "Failed to retrieve Azure identity information: $_"
         return $null
     }
 }
+
 
 # Generate Random Password
 function New-RandomPassword {
@@ -285,6 +358,18 @@ function New-RandomPassword {
     $password = ($alphabetPart + $nonAlphaNumericPart).ToCharArray() | Sort-Object { Get-Random }
 
     return -join $password
+}
+
+# Get Public Ip Address
+function Get-PublicIpAddress {
+    try {
+        $publicIp = (Invoke-WebRequest -Uri "https://api.ipify.org?format=text" -UseBasicParsing).Content
+        return $publicIp
+    }
+    catch {
+        Write-Warning "Unable to retrieve public IP address. Ensure you have internet connectivity."
+        return $null
+    }
 }
 
 # PowerShell Location Shortcode Map
@@ -413,10 +498,14 @@ if (!$servicePrincipalAuthentication) {
 }
 
 # Get Azure Identity, Required for Deployment Tags (DeployedBy:)
-$azIdentityName = Get-AzIdentity
+$azIdentityName = Get-AzIdentity -SubscriptionId $subscriptionId
+if (-not $azIdentityName) {
+    Write-Error "Unable to determine Azure identity and/or insufficient RBAC permissions. Exiting."
+    exit 1
+}
 
-# Get User Public IP Address
-$publicIp = (Invoke-RestMethod -Uri 'https://ifconfig.me/ip')
+# Get Public IP Address for Network Security Group Rules
+$publicIpAddress = Get-PublicIpAddress
 
 # Change Azure Subscription
 Write-Output `r "Updating Azure Subscription context to $subscriptionId"
@@ -439,13 +528,14 @@ if ($deploy) {
         --name iac-$deployGuid `
         --location $location `
         --template-file ./main.bicep `
-        --parameters ./main.bicepparam `
+        --parameters main.bicepparam `
         --parameters `
         location=$location `
         locationShortCode=$($locationShortCodeMap.$location) `
         customerName=$customerName `
         environmentType=$environmentType `
         deployedBy=$azIdentityName `
+        publicIpAddress=$publicIpAddress `
         --confirm-with-what-if `
         --output none
 
