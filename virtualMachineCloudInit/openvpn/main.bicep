@@ -62,16 +62,16 @@ var cloudInitData = loadTextContent(cloudInitFile)
 // Bicep Deployment Variables
 
 @description('The Resource Group Name')
-param resourceGroupName string = 'rg-x-${customerName}-linux-${locationShortCode}'
+param resourceGroupName string = 'rg-x-${customerName}-openvpn-${environmentType}-${locationShortCode}'
 
 @description('The Network Security Group Name')
-param networkSecurityGroupName string = 'nsg-${customerName}-linux-${locationShortCode}'
+param networkSecurityGroupName string = 'nsg-${customerName}-openvpn-${environmentType}-${locationShortCode}'
 
 @description('The Virtual Network Name')
-param virtualNetworkName string = 'vnet-${customerName}-linux-${locationShortCode}'
+param virtualNetworkName string = 'vnet-${customerName}-openvpn-${environmentType}-${locationShortCode}'
 
 @description('The Subnet Name')
-param subnetName string = 'snet-${customerName}-linux-${locationShortCode}'
+param subnetName string = 'snet-${customerName}-openvpn-${environmentType}-${locationShortCode}'
 
 @description('The Virtual Network Address Space')
 param vnetAddressSpace array
@@ -80,7 +80,9 @@ param vnetAddressSpace array
 param subnetAddressPrefix string
 
 @description('The name of the virtual machine')
-param vmHostName string = 'vm-linux-01'
+param openVpnHostName string = 'vm-${customerName}-openvpn-${environmentType}'
+
+param clientHostName string = 'vm-${customerName}-client-${environmentType}'
 
 @description('The Local User Account Name')
 param vmUserName string
@@ -89,10 +91,13 @@ param vmUserName string
 @secure()
 param vmUserPassword string
 
+@description('Public IP Address')
+param publicIpAddress string
+
 //
 // Azure Verified Modules - No Hard Coded Values below this line!
 
-module createResourceGroup 'br/public:avm/res/resources/resource-group:0.4.1' = {
+module createResourceGroup 'br/public:avm/res/resources/resource-group:0.4.3' = {
   name: 'create-resource-group'
   params: {
     name: resourceGroupName
@@ -101,7 +106,7 @@ module createResourceGroup 'br/public:avm/res/resources/resource-group:0.4.1' = 
   }
 }
 
-module createNetworkSecurityGroup 'br/public:avm/res/network/network-security-group:0.5.1' = {
+module createNetworkSecurityGroup 'br/public:avm/res/network/network-security-group:0.5.2' = {
   name: 'createNetworkSecurityGroup'
   scope: resourceGroup(resourceGroupName)
   params: {
@@ -121,6 +126,19 @@ module createNetworkSecurityGroup 'br/public:avm/res/network/network-security-gr
           destinationPortRange: '1194'
         }
       }
+      {
+        name: 'allowSSH_TCP'
+        properties: {
+          priority: 101
+          access: 'Allow'
+          direction: 'Inbound'
+          protocol: 'Tcp'
+          sourceAddressPrefix: publicIpAddress
+          sourcePortRange: '*'
+          destinationAddressPrefix: '*'
+          destinationPortRange: '22'
+        }
+      }
     ]
     tags: tags
   }
@@ -129,7 +147,7 @@ module createNetworkSecurityGroup 'br/public:avm/res/network/network-security-gr
   ]
 }
 
-module createVirtualNetwork 'br/public:avm/res/network/virtual-network:0.7.0' = {
+module createVirtualNetwork 'br/public:avm/res/network/virtual-network:0.7.2' = {
   name: 'create-virtual-network'
   scope: resourceGroup(resourceGroupName)
   params: {
@@ -150,16 +168,16 @@ module createVirtualNetwork 'br/public:avm/res/network/virtual-network:0.7.0' = 
   ]
 }
 
-module createVirtualMachine 'br/public:avm/res/compute/virtual-machine:0.16.0' = {
-  name: 'create-virtual-machine'
+module createOpenVPNVirtualMachine 'br/public:avm/res/compute/virtual-machine:0.21.0' = {
+  name: 'create-openvpn-virtual-machine'
   scope: resourceGroup(resourceGroupName)
   params: {
-    name: vmHostName
+    name: openVpnHostName
     adminUsername: vmUserName
     adminPassword: vmUserPassword
     location: location
     osType: 'Linux'
-    vmSize: 'Standard_B2ms'
+    vmSize: 'Standard_D2ls_v6'
     customData: cloudInitData
     availabilityZone: 1
     bootDiagnostics: true
@@ -179,13 +197,64 @@ module createVirtualMachine 'br/public:avm/res/compute/virtual-machine:0.16.0' =
           {
             name: 'ipconfig01'
             pipConfiguration: {
-              name: '${vmHostName}-pip-01'
+              name: '${openVpnHostName}-pip-01'
             }
             subnetResourceId: createVirtualNetwork.outputs.subnetResourceIds[0]
           }
         ]
         nicSuffix: '-nic-01'
-        enableAcceleratedNetworking: false
+        enableAcceleratedNetworking: true
+        enableIPForwarding: true
+      }
+    ]
+    osDisk: {
+      caching: 'ReadWrite'
+      diskSizeGB: 128
+      managedDisk: {
+        storageAccountType: 'Premium_LRS'
+      }
+    }
+    tags: tags
+  }
+  dependsOn: [
+    createVirtualNetwork
+  ]
+}
+
+module createClientVirtualMachine 'br/public:avm/res/compute/virtual-machine:0.21.0' = {
+  name: 'create-client-virtual-machine'
+  scope: resourceGroup(resourceGroupName)
+  params: {
+    name: clientHostName
+    computerName: 'client01'
+    adminUsername: vmUserName
+    adminPassword: vmUserPassword
+    location: location
+    osType: 'Windows'
+    vmSize: 'Standard_D2ls_v6'
+    customData: cloudInitData
+    availabilityZone: 1
+    bootDiagnostics: true
+    secureBootEnabled: true
+    encryptionAtHost: true
+    vTpmEnabled: true
+    securityType: 'TrustedLaunch'
+    imageReference: {
+      publisher: 'MicrosoftWindowsServer'
+      offer: 'WindowsServer'
+      sku: '2025-datacenter-azure-edition'
+      version: 'latest'
+    }
+    nicConfigurations: [
+      {
+        ipConfigurations: [
+          {
+            name: 'ipconfig01'
+            subnetResourceId: createVirtualNetwork.outputs.subnetResourceIds[0]
+          }
+        ]
+        nicSuffix: '-nic-01'
+        enableAcceleratedNetworking: true
       }
     ]
     osDisk: {
