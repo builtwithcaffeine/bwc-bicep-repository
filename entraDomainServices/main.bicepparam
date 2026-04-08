@@ -7,14 +7,13 @@ param locationShortCode = ''
 param environmentType = ''
 param deployedBy = ''
 
-
 // Virtual Network - Address Space
 param vnetAddressSpace = [
-  '192.168.0.0/24'
+  '10.1.0.0/24'
 ]
 
 // Virtual Network - Subnet Address Space
-param subnetAddressPrefix = '192.168.0.0/24'
+param subnetAddressPrefix = '10.1.0.0/27'
 
 // Entra Id Domain Services
 param domainName = 'ad.builtwithcaffeine.cloud'

@@ -1,4 +1,4 @@
-targetScope = 'subscription' // Please Update this based on deploymentScope Variable
+targetScope = 'subscription'
 
 //
 // Imported Parameters
@@ -66,6 +66,7 @@ var virtualNetworkConfig = {
       name: 'snet-domainservices'
       addressPrefix: subnetAddressPrefix
       networkSecurityGroupResourceId: createNetworkSecurityGroup.outputs.resourceId
+      defaultOutboundAccess: false
     }
   ]
 }
@@ -104,7 +105,7 @@ module createLogAnalyticsWorkspace 'br/public:avm/res/operational-insights/works
   ]
 }
 
-module createNetworkSecurityGroup 'br/public:avm/res/network/network-security-group:0.5.2' = {
+module createNetworkSecurityGroup 'br/public:avm/res/network/network-security-group:0.5.3' = {
   name: 'createNetworkSecurityGroup'
   scope: resourceGroup(resourceGroupName)
   params: {
@@ -145,7 +146,7 @@ module createNetworkSecurityGroup 'br/public:avm/res/network/network-security-gr
   ]
 }
 
-module createVirtualNetwork 'br/public:avm/res/network/virtual-network:0.7.2' = {
+module createVirtualNetwork 'br/public:avm/res/network/virtual-network:0.8.0' = {
   name: 'createVirtualNetwork'
   scope: resourceGroup(resourceGroupName)
   params: {
@@ -172,7 +173,10 @@ module createEntraDomainService 'br/public:avm/res/aad/domain-service:0.6.0' = {
     externalAccess: 'Disabled'
     ldaps: 'Disabled'
     ntlmV1: 'Disabled'
+    syncNtlmPasswords: 'Disabled'
     tlsV1: 'Disabled'
+    kerberosRc4Encryption: 'Disabled'
+    kerberosArmoring: 'Enabled'
     replicaSets: [
       {
         location: location
