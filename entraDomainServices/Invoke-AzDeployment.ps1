@@ -327,54 +327,6 @@ function Get-AzIdentity {
     }
 }
 
-
-# Generate Random Password
-function New-RandomPassword {
-    param (
-        [Parameter(Mandatory)]
-        [ValidateRange(8, 128)] # Ensure password length is within a reasonable range
-        [int] $length,
-
-        [ValidateRange(0, 128)] # Ensure non-alphanumeric count is valid
-        [int] $amountOfNonAlphanumeric = 2
-    )
-
-    if ($amountOfNonAlphanumeric -gt $length) {
-        throw "The number of non-alphanumeric characters cannot exceed the total password length."
-    }
-
-    $nonAlphaNumericChars = '!@$#%^&*()_-+=[{]};:<>|./?'
-    $alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789'
-
-    # Generate non-alphanumeric and alphanumeric parts
-    $nonAlphaNumericPart = -join ((1..$amountOfNonAlphanumeric | ForEach-Object { $nonAlphaNumericChars | Get-Random }))
-    $alphabetPart = -join ((1..($length - $amountOfNonAlphanumeric) | ForEach-Object { $alphabet | Get-Random }))
-
-    # Combine and shuffle the password
-    $password = ($alphabetPart + $nonAlphaNumericPart).ToCharArray() | Sort-Object { Get-Random }
-
-    return -join $password
-}
-
-# Generate Random Password
-function New-RandomPassword {
-    param (
-        [Parameter(Mandatory)]
-        [int] $length,
-        [int] $amountOfNonAlphanumeric = 2
-    )
-
-    $nonAlphaNumericChars = '!@$#%^&*()_-+=[{]};:<>|./?'
-    $nonAlphaNumericPart = -join ((Get-Random -Count $amountOfNonAlphanumeric -InputObject $nonAlphaNumericChars.ToCharArray()))
-
-    $alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789'
-    $alphabetPart = -join ((Get-Random -Count ($length - $amountOfNonAlphanumeric) -InputObject $alphabet.ToCharArray()))
-
-    $password = ($alphabetPart + $nonAlphaNumericPart).ToCharArray() | Sort-Object { Get-Random }
-
-    return -join $password
-}
-
 function New-EntraIdADDSEnterpriseApplication {
     # Create Enterprise Application - 'Domain Controller Services'
     Write-Host "Checking for 'ADDS Domain Controller Services' Enterprise Application..."
@@ -560,7 +512,6 @@ az account set --subscription $subscriptionId --output none
 # Check and Create Domain Controller Services
 New-EntraIdADDSEnterpriseApplication
 
-
 Write-Output `r "Pre Flight Variable Validation:"
 Write-Output "Deployment Guid......: $deployGuid"
 Write-Output "Location.............: $location"
@@ -590,6 +541,6 @@ if ($deploy) {
 
     $deployEndTime = Get-Date -Format 'HH:mm:ss'
     $timeDifference = New-TimeSpan -Start $deployStartTime -End $deployEndTime ; $deploymentDuration = "{0:hh\:mm\:ss}" -f $timeDifference
-    Write-Output `r "> Deployment [$azDeployGuidLink] Started at $deployEndTime - Deployment Duration: $deploymentDuration"
+    Write-Output `r "> Deployment [$azDeployGuidLink] Completed at $deployEndTime - Deployment Duration: $deploymentDuration"
 
 }
