@@ -1,7 +1,5 @@
 targetScope = 'subscription'
 
-param subscriptionId string = subscription().subscriptionId
-
 //
 // Imported Parameters
 
@@ -30,30 +28,92 @@ param tags object = {
 //
 // Bicep Deployment Variables
 
-@description('Resource Group Name')
-param resourceGroupName string = 'rg-x-${customerName}-appgw-${environmentType}-${locationShortCode}'
+var resourceGroupName = 'rg-x-${customerName}-agw-${environmentType}-${locationShortCode}'
+var logAnalyticsWorkspaceName = 'log-${customerName}-agwdiags-${environmentType}-${locationShortCode}'
+var virtualNetworkName = 'vnet-agw-${customerName}-${environmentType}-${locationShortCode}'
+var networkSecurityGroupName = 'nsg-agw-${customerName}-${environmentType}-${locationShortCode}'
+var applicationGatewayWafName = 'waf-agw-${customerName}-${environmentType}-${locationShortCode}'
+var applicationGatewayPublicIpName = 'pip-agw-${customerName}-${environmentType}-${locationShortCode}'
+var applicationGatewayDnsFqdn = 'agw-${customerName}-primary-${environmentType}'
+var applicationGatewayName = 'agw-${customerName}-${environmentType}-${locationShortCode}'
+var applicationGatewaySku = 'WAF_v2'
 
-@description('Virtual Network Name')
-param virtualNetworkName string = 'vnet-agw-${customerName}-${environmentType}-${locationShortCode}'
+//
+// User-Defined Types
 
-@description('Virtual Network Address Prefixes')
-param virtualNetworkAddressPrefixes array = [
-  '10.0.0.0/24'
-]
+type subnetConfigType = {
+  @description('Subnet name')
+  name: string
 
-@description('Subnets Configuration')
-param subnets array = [
-  {
-    name: 'subnet-appgw'
-    addressPrefix: '10.0.0.0/29'
-  }
-]
+  @description('Subnet address prefix in CIDR notation')
+  addressPrefix: string
+}
 
-@description('Application Gateway WAF Name')
-param applicationGatewayWafName string = 'waf-agw-${customerName}-${environmentType}-${locationShortCode}'
+type virtualNetworkSettingsType = {
+  @description('VNet address space prefixes')
+  addressPrefixes: string[]
+
+  @description('Subnet configurations')
+  subnets: subnetConfigType[]
+}
+
+type managedRuleSetType = {
+  @description('Rule set type (e.g. OWASP)')
+  ruleSetType: string
+
+  @description('Rule set version (e.g. 3.2)')
+  ruleSetVersion: string
+}
+
+type wafManagedRulesType = {
+  @description('Managed rule sets to apply')
+  managedRuleSets: managedRuleSetType[]
+}
+
+type wafPolicySettingsType = {
+  @description('WAF state: Enabled or Disabled')
+  state: ('Enabled' | 'Disabled')
+
+  @description('WAF mode: Detection or Prevention')
+  mode: ('Detection' | 'Prevention')
+
+  @description('Enforce file upload limits')
+  fileUploadEnforcement: bool
+
+  @description('Enforce request body limits')
+  requestBodyEnforcement: bool
+
+  @description('Enable request body inspection')
+  requestBodyCheck: bool
+
+  @description('Max request body size in KB')
+  maxRequestBodySizeInKb: int
+
+  @description('File upload limit in MB')
+  fileUploadLimitInMb: int
+
+  @description('Request body inspect limit in KB')
+  requestBodyInspectLimitInKB: int
+}
+
+//
+// Typed Parameters
+
+@description('Virtual Network Settings')
+param virtualNetworkSettings virtualNetworkSettingsType = {
+  addressPrefixes: [
+    '10.0.0.0/24'
+  ]
+  subnets: [
+    {
+      name: 'snet-agw'
+      addressPrefix: '10.0.0.0/26'
+    }
+  ]
+}
 
 @description('WAF Configuration - Managed Rules')
-param applicationGatewayManagedRules object = {
+param applicationGatewayManagedRules wafManagedRulesType = {
   managedRuleSets: [
     {
       ruleSetType: 'OWASP'
@@ -63,7 +123,7 @@ param applicationGatewayManagedRules object = {
 }
 
 @description('WAF Configuration - Policy Settings')
-param applicationGatewayPolicySettings object = {
+param applicationGatewayPolicySettings wafPolicySettingsType = {
   state: 'Enabled'
   mode: 'Detection'
   fileUploadEnforcement: true
@@ -74,83 +134,29 @@ param applicationGatewayPolicySettings object = {
   requestBodyInspectLimitInKB: 256
 }
 
-@description('Application Gateway Public IP Name')
-param applicationGatewayPublicIpName string = 'pip-agw-${customerName}-${environmentType}-${locationShortCode}'
-param applicationGatewayDnsFqdn string = 'appgw-${customerName}-primary-${environmentType}'
+@description('Application Gateway - Autoscale Minimum Capacity')
+@minValue(1)
+@maxValue(125)
+param autoscaleMinCapacity int = 1
 
-@description('Application Gateway Name')
-param applicationGatewayName string = 'agw-${customerName}-${environmentType}-${locationShortCode}'
+@description('Application Gateway - Autoscale Maximum Capacity')
+@minValue(1)
+@maxValue(125)
+param autoscaleMaxCapacity int = 2
 
-param applicationGatewaySettings array = [
-  {
-    name: 'applicationGatewaySettings'
-    properties: {
-      enableHttp2: true
-      sku: 'WAF_v2'
-      firewallPolicyResourceId: ''
-      autoscaleMinCapacity: 1
-      autoscaleMaxCapacity: 3
-      frontendPorts: [
-        {
-          name: 'frontendPort1'
-          properties: {
-            port: 80
-          }
-        }
-      ]
-      backendAddressPools: [
-        {
-          name: 'backendAddressPool1'
-        }
-      ]
-      backendHttpSettingsCollection: [
-        {
-          name: 'backendHttpSettings1'
-          properties: {
-            cookieBasedAffinity: 'Disabled'
-            port: 80
-            protocol: 'Http'
-          }
-        }
-      ]
-      httpListeners: [
-        {
-          name: 'httpListener1'
-          properties: {
-            frontendIPConfiguration: {
-              id: '/subscriptions/${subscriptionId}/resourceGroups/${resourceGroupName}/providers/Microsoft.Network/applicationGateways/${applicationGatewayName}/frontendIPConfigurations/publicIPConfig1'
-            }
-            frontendPort: {
-              id: '/subscriptions/${subscriptionId}/resourceGroups/${resourceGroupName}/providers/Microsoft.Network/applicationGateways/${applicationGatewayName}/frontendPorts/frontendPort1'
-            }
-            hostName: 'www.contoso.com'
-            protocol: 'Http'
-          }
-        }
-      ]
-      requestRoutingRules: [
-        {
-          name: 'requestRoutingRule1'
-          properties: {
-            backendAddressPool: {
-              id: '/subscriptions/${subscriptionId}/resourceGroups/${resourceGroupName}/providers/Microsoft.Network/applicationGateways/${applicationGatewayName}/backendAddressPools/backendAddressPool1'
-            }
-            backendHttpSettings: {
-              id: '/subscriptions/${subscriptionId}/resourceGroups/${resourceGroupName}/providers/Microsoft.Network/applicationGateways/${applicationGatewayName}/backendHttpSettingsCollection/backendHttpSettings1'
-            }
-            httpListener: {
-              id: '/subscriptions/${subscriptionId}/resourceGroups/${resourceGroupName}/providers/Microsoft.Network/applicationGateways/${applicationGatewayName}/httpListeners/httpListener1'
-            }
-            priority: 100
-            ruleType: 'Basic'
-          }
-        }
-      ]
-    }
-  }
-]
+@description('Application Gateway - Listener Host Name')
+param listenerHostName string = 'demo.builtwithcaffeine.cloud'
 
-module createResourceGroup 'br/public:avm/res/resources/resource-group:0.4.1' = {
+//
+// Variables
+
+var enableHttp2 = true
+var applicationGatewayResourceIdPath = '/subscriptions/${subscription().subscriptionId}/resourceGroups/${resourceGroupName}/providers/Microsoft.Network/applicationGateways/${applicationGatewayName}'
+
+//
+// Azure Verified Modules - No Hard Coded Values below this line!
+
+module createResourceGroup 'br/public:avm/res/resources/resource-group:0.4.3' = {
   name: 'create-resource-group'
   params: {
     name: resourceGroupName
@@ -159,14 +165,101 @@ module createResourceGroup 'br/public:avm/res/resources/resource-group:0.4.1' = 
   }
 }
 
-module createVirtualNetwork 'br/public:avm/res/network/virtual-network:0.7.0' = {
-  name: 'createVirtualNetwork'
+module createLogAnalyticsWorkspace 'br/public:avm/res/operational-insights/workspace:0.15.0' = {
+  name: 'create-log-analytics-workspace'
+  scope: resourceGroup(resourceGroupName)
+  params: {
+    name: logAnalyticsWorkspaceName
+    location: location
+    dataRetention: 30
+    tags: tags
+  }
+  dependsOn: [
+    createResourceGroup
+  ]
+}
+
+module createNetworkSecurityGroup 'br/public:avm/res/network/network-security-group:0.5.0' = {
+  name: 'create-network-security-group'
+  scope: resourceGroup(resourceGroupName)
+  params: {
+    name: networkSecurityGroupName
+    location: location
+    securityRules: [
+      {
+        name: 'Allow-GatewayManager-Inbound'
+        properties: {
+          priority: 100
+          direction: 'Inbound'
+          access: 'Allow'
+          protocol: 'Tcp'
+          sourceAddressPrefix: 'GatewayManager'
+          sourcePortRange: '*'
+          destinationAddressPrefix: '*'
+          destinationPortRange: '65200-65535'
+        }
+      }
+      {
+        name: 'Allow-AzureLoadBalancer-Inbound'
+        properties: {
+          priority: 110
+          direction: 'Inbound'
+          access: 'Allow'
+          protocol: '*'
+          sourceAddressPrefix: 'AzureLoadBalancer'
+          sourcePortRange: '*'
+          destinationAddressPrefix: '*'
+          destinationPortRange: '*'
+        }
+      }
+      {
+        name: 'Allow-HTTP-Inbound'
+        properties: {
+          priority: 200
+          direction: 'Inbound'
+          access: 'Allow'
+          protocol: 'Tcp'
+          sourceAddressPrefix: 'Internet'
+          sourcePortRange: '*'
+          destinationAddressPrefix: 'VirtualNetwork'
+          destinationPortRange: '80'
+        }
+      }
+      {
+        name: 'Allow-HTTPS-Inbound'
+        properties: {
+          priority: 210
+          direction: 'Inbound'
+          access: 'Allow'
+          protocol: 'Tcp'
+          sourceAddressPrefix: 'Internet'
+          sourcePortRange: '*'
+          destinationAddressPrefix: 'VirtualNetwork'
+          destinationPortRange: '443'
+        }
+      }
+    ]
+    tags: tags
+  }
+  dependsOn: [
+    createResourceGroup
+  ]
+}
+
+module createVirtualNetwork 'br/public:avm/res/network/virtual-network:0.7.2' = {
+  name: 'create-virtual-network'
   scope: resourceGroup(resourceGroupName)
   params: {
     name: virtualNetworkName
     location: location
-    addressPrefixes: virtualNetworkAddressPrefixes
-    subnets: subnets
+    addressPrefixes: virtualNetworkSettings.addressPrefixes
+    subnets: [
+      {
+        name: virtualNetworkSettings.subnets[0].name
+        addressPrefix: virtualNetworkSettings.subnets[0].addressPrefix
+        networkSecurityGroupResourceId: createNetworkSecurityGroup.outputs.resourceId
+      }
+    ]
     tags: tags
   }
   dependsOn: [
@@ -200,7 +293,6 @@ module createApplicationGatewayPublicIp 'br/public:avm/res/network/public-ip-add
     publicIPAllocationMethod: 'Static'
     dnsSettings: {
       domainNameLabel: applicationGatewayDnsFqdn
-      fqdn: '${applicationGatewayDnsFqdn}.${location}.cloudapp.azure.com'
     }
     location: location
     tags: tags
@@ -216,39 +308,118 @@ module createApplicationGateway 'br/public:avm/res/network/application-gateway:0
   params: {
     name: applicationGatewayName
     location: location
-    frontendIPConfigurations: [
-        {
-          name: 'publicIPConfig1'
-          properties: {
-            publicIPAddress: {
-              id: createApplicationGatewayPublicIp.outputs.resourceId
-            }
-          }
-        }
-      ]
-    gatewayIPConfigurations: [
-        {
-          name: 'privateIPConfig1'
-          properties: {
-            subnet: {
-              id: createVirtualNetwork.outputs.subnetResourceIds[0]
-            }
-          }
-        }
-      ]
-    enableHttp2: applicationGatewaySettings[0].properties.enableHttp2
-    sku: applicationGatewaySettings[0].properties.sku
+    enableHttp2: enableHttp2
+    sku: applicationGatewaySku
+    sslPolicyType: 'Predefined'
+    sslPolicyName: 'AppGwSslPolicy20220101'
     firewallPolicyResourceId: createApplicationGatewayWaf.outputs.resourceId
-    autoscaleMinCapacity: applicationGatewaySettings[0].properties.autoscaleMinCapacity
-    autoscaleMaxCapacity: applicationGatewaySettings[0].properties.autoscaleMaxCapacity
-    backendAddressPools: applicationGatewaySettings[0].properties.backendAddressPools
-    backendHttpSettingsCollection: applicationGatewaySettings[0].properties.backendHttpSettingsCollection
-    frontendPorts: applicationGatewaySettings[0].properties.frontendPorts
-    httpListeners: applicationGatewaySettings[0].properties.httpListeners
-    requestRoutingRules: applicationGatewaySettings[0].properties.requestRoutingRules
+    autoscaleMinCapacity: autoscaleMinCapacity
+    autoscaleMaxCapacity: autoscaleMaxCapacity
+    frontendIPConfigurations: [
+      {
+        name: 'publicIPConfig1'
+        properties: {
+          publicIPAddress: {
+            id: createApplicationGatewayPublicIp.outputs.resourceId
+          }
+        }
+      }
+    ]
+    gatewayIPConfigurations: [
+      {
+        name: 'gatewayIPConfig1'
+        properties: {
+          subnet: {
+            id: createVirtualNetwork.outputs.subnetResourceIds[0]
+          }
+        }
+      }
+    ]
+    frontendPorts: [
+      {
+        name: 'frontendPort-http'
+        properties: {
+          port: 80
+        }
+      }
+      {
+        name: 'frontendPort-https'
+        properties: {
+          port: 443
+        }
+      }
+    ]
+    backendAddressPools: [
+      {
+        name: 'bp-demo.builtwithcaffeine.cloud'
+      }
+    ]
+    probes: [
+      {
+        name: 'hp-demo.builtwithcaffeine.cloud'
+        properties: {
+          protocol: 'Http'
+          path: '/'
+          interval: 30
+          timeout: 30
+          unhealthyThreshold: 3
+          pickHostNameFromBackendHttpSettings: true
+        }
+      }
+    ]
+    backendHttpSettingsCollection: [
+      {
+        name: 'bs-demo.builtwithcaffeine.cloud'
+        properties: {
+          cookieBasedAffinity: 'Disabled'
+          port: 80
+          protocol: 'Http'
+          hostName: listenerHostName
+          pickHostNameFromBackendAddress: true
+          probe: {
+            id: '${applicationGatewayResourceIdPath}/probes/hp-demo.builtwithcaffeine.cloud'
+          }
+        }
+      }
+    ]
+    httpListeners: [
+      {
+        name: 'http-demo.builtwithcaffeine.cloud'
+        properties: {
+          frontendIPConfiguration: {
+            id: '${applicationGatewayResourceIdPath}/frontendIPConfigurations/publicIPConfig1'
+          }
+          frontendPort: {
+            id: '${applicationGatewayResourceIdPath}/frontendPorts/frontendPort-http'
+          }
+          hostName: listenerHostName
+          protocol: 'Http'
+        }
+      }
+    ]
+    requestRoutingRules: [
+      {
+        name: 'rule-demo.builtwithcaffeine.cloud'
+        properties: {
+          backendAddressPool: {
+            id: '${applicationGatewayResourceIdPath}/backendAddressPools/bp-demo.builtwithcaffeine.cloud'
+          }
+          backendHttpSettings: {
+            id: '${applicationGatewayResourceIdPath}/backendHttpSettingsCollection/bs-demo.builtwithcaffeine.cloud'
+          }
+          httpListener: {
+            id: '${applicationGatewayResourceIdPath}/httpListeners/http-demo.builtwithcaffeine.cloud'
+          }
+          priority: 100
+          ruleType: 'Basic'
+        }
+      }
+    ]
+    diagnosticSettings: [
+      {
+        workspaceResourceId: createLogAnalyticsWorkspace.outputs.resourceId
+      }
+    ]
     tags: tags
   }
-  dependsOn: [
-    createApplicationGatewayPublicIp
-  ]
 }
