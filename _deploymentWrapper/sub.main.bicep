@@ -33,7 +33,7 @@ var resourceGroupName = 'rg-x-${customerName}-example-${environmentType}-${locat
 //
 // Azure Verified Modules - No Hard Coded Values below this line!
 
-module createResourceGroup 'br/public:avm/res/resources/resource-group:0.4.1' = {
+module createResourceGroup 'br/public:avm/res/resources/resource-group:0.4.3' = {
   name: 'create-resource-group'
   params: {
     name: resourceGroupName
