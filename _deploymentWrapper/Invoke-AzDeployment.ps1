@@ -1,4 +1,58 @@
 
+
+<#
+.SYNOPSIS
+    Wrapper script for deploying Azure Bicep templates at subscription, management group, or tenant scope.
+
+.DESCRIPTION
+    This script validates environment prerequisites, authenticates to Azure (user or service principal), and deploys a Bicep template using Azure CLI.
+    It supports what-if preview, RBAC validation, and tagging deployments with metadata.
+
+.PARAMETER targetScope
+    Deployment scope: 'tenant', 'mg', or 'sub'.
+
+.PARAMETER subscriptionId
+    Azure Subscription Id (required for 'sub' scope).
+
+.PARAMETER environmentType
+    Environment type: 'dev', 'acc', or 'prod'.
+
+.PARAMETER customerName
+    Customer name for tagging and parameterization.
+
+.PARAMETER location
+    Azure region/location for deployment.
+
+.PARAMETER deploy
+    If specified, executes the deployment. Otherwise, only validates and performs pre-flight checks.
+
+.PARAMETER servicePrincipalAuthentication
+    If specified, uses service principal authentication instead of user authentication.
+
+.PARAMETER spAuthCredentialFile
+    Path to a JSON file containing service principal credentials (spAppId, spAppSecret, spTenantId).
+
+.PARAMETER managementGroupId
+    Management Group Id (required for 'mg' scope).
+
+.PARAMETER tenantId
+    Tenant Id (required for 'tenant' scope).
+
+.EXAMPLE
+    .\Invoke-AzDeployment.ps1 -targetScope sub -subscriptionId <subId> -environmentType dev -customerName Contoso -location eastus -deploy
+
+.EXAMPLE
+    .\Invoke-AzDeployment.ps1 -targetScope mg -managementGroupId <mgId> -environmentType prod -customerName Fabrikam -location westeurope -deploy
+
+.EXAMPLE
+    .\Invoke-AzDeployment.ps1 -targetScope tenant -tenantId <tenantId> -environmentType acc -customerName Demo -location centralus -deploy
+
+.NOTES
+    Author: BuiltWithCaffeine
+    Requires: PowerShell 7+, Azure CLI, Bicep CLI
+    Script Version: 2.0
+#>
+
 #Requires -Version 7.0
 
 [CmdletBinding(SupportsShouldProcess)]
@@ -6,16 +60,22 @@ param (
     [Parameter(Mandatory = $true, Position = 0, HelpMessage = "Deployment scope: tenant, mg, or sub")]
     [ValidateSet('tenant', 'mg', 'sub')] [string] $targetScope,
 
-    [Parameter(Mandatory = $false, Position = 1, HelpMessage = "Azure Subscription Id (required for sub scope)")]
+    [Parameter(Mandatory = $false, Position = 1, HelpMessage = "Tenant Id (required for tenant scope)")]
+    [string] $tenantId,
+
+    [Parameter(Mandatory = $false, Position = 2, HelpMessage = "Management Group Id (required for mg scope)")]
+    [string] $managementGroupId,
+
+    [Parameter(Mandatory = $false, Position = 3, HelpMessage = "Azure Subscription Id (required for sub scope)")]
     [ValidatePattern('^[0-9a-fA-F]{8}-([0-9a-fA-F]{4}-){3}[0-9a-fA-F]{12}$')] [string] $subscriptionId,
 
-    [Parameter(Mandatory = $true, Position = 2, HelpMessage = "Environment Type is required")]
+    [Parameter(Mandatory = $true, Position = 4, HelpMessage = "Environment Type is required")]
     [ValidateSet('dev', 'acc', 'prod')][string] $environmentType,
 
-    [Parameter(Mandatory = $true, Position = 3, HelpMessage = "Customer Name")]
+    [Parameter(Mandatory = $true, Position = 5, HelpMessage = "Customer Name")]
     [string] $customerName,
 
-    [Parameter(Mandatory = $true, Position = 4, HelpMessage = "Azure Location is required")]
+    [Parameter(Mandatory = $true, Position = 6, HelpMessage = "Azure Location is required")]
     [ValidateSet("eastus", "eastus2", "westus", "westus2", "westus3", "centralus", "northcentralus",
         "southcentralus", "westcentralus", "canadacentral", "canadaeast", "brazilsouth", "brazilsoutheast",
         "northeurope", "westeurope", "uksouth", "ukwest", "swedencentral", "francecentral", "francesouth",
@@ -28,43 +88,75 @@ param (
         "austriaeast", "belgiumcentral", "denmarkeast", "italynorth")]
     [string] $location,
 
-    [Parameter(Mandatory = $false, Position = 5, HelpMessage = "Execute Infrastructure Deployment")]
+    [Parameter(Mandatory = $false, Position = 7, HelpMessage = "Execute Infrastructure Deployment")]
     [switch] $deploy,
 
-    [Parameter(Mandatory = $false, Position = 6, HelpMessage = "Use Service Principal Authentication")]
+    [Parameter(Mandatory = $false, Position = 8, HelpMessage = "Use Service Principal Authentication")]
     [switch] $servicePrincipalAuthentication,
 
-    [Parameter(Mandatory = $false, Position = 7, HelpMessage = "Service Principal Authentication File")]
+    [Parameter(Mandatory = $false, Position = 9, HelpMessage = "Service Principal Authentication File")]
     [String] $spAuthCredentialFile,
 
-    [Parameter(Mandatory = $false, Position = 8, HelpMessage = "Management Group Id (required for mg scope)")]
-    [string] $managementGroupId,
-
-    [Parameter(Mandatory = $false, Position = 9, HelpMessage = "Tenant Id (required for tenant scope)")]
-    [string] $tenantId
+    [Parameter(Mandatory = $false, Position = 10, HelpMessage = "Optional Bicep template file path. Defaults to ./main.bicep")]
+    [string] $templateFile = './main.bicep'
 )
 
 # Enforce strict mode and stop on errors
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
+# Centralized scope profile
+$scopeProfiles = @{
+    'sub'    = @{
+        DisplayName            = 'Subscription'
+        DeployScopeCode        = 'sub'
+        RequiredParameterName  = 'subscriptionId'
+        RequiredParameterValue = $subscriptionId
+        ScopeContextLinePrefix = $null
+        ScopeContextValue      = $null
+        ScopeTarget            = "Subscription '$subscriptionId'"
+        DeploymentPath         = "/subscriptions/$subscriptionId/providers/Microsoft.Resources/deployments"
+        CliScopeArgName        = '--subscription'
+        CliScopeArgValue       = $subscriptionId
+    }
+    'mg'     = @{
+        DisplayName            = 'Management Group'
+        DeployScopeCode        = 'mg'
+        RequiredParameterName  = 'managementGroupId'
+        RequiredParameterValue = $managementGroupId
+        ScopeContextLinePrefix = 'Management Group Id..'
+        ScopeContextValue      = $managementGroupId
+        ScopeTarget            = "Management Group '$managementGroupId'"
+        DeploymentPath         = "/providers/Microsoft.Management/managementGroups/$managementGroupId/providers/Microsoft.Resources/deployments"
+        CliScopeArgName        = '--management-group-id'
+        CliScopeArgValue       = $managementGroupId
+    }
+    'tenant' = @{
+        DisplayName            = 'Tenant'
+        DeployScopeCode        = 'tn'
+        RequiredParameterName  = 'tenantId'
+        RequiredParameterValue = $tenantId
+        ScopeContextLinePrefix = 'Tenant Id............'
+        ScopeContextValue      = $tenantId
+        ScopeTarget            = "Tenant '$tenantId'"
+        DeploymentPath         = '/providers/Microsoft.Resources/deployments'
+        CliScopeArgName        = $null
+        CliScopeArgValue       = $null
+    }
+}
+
+$scopeProfile = $scopeProfiles[$targetScope]
+if (-not $scopeProfile) {
+    throw "Unsupported targetScope '$targetScope'."
+}
+
+if (-not (Test-Path -Path $templateFile -PathType Leaf)) {
+    throw "Template file '$templateFile' was not found."
+}
+
 # Validate scope-specific parameters
-switch ($targetScope) {
-    'sub' {
-        if (-not $subscriptionId) {
-            throw "subscriptionId is required when targetScope is 'sub'."
-        }
-    }
-    'mg' {
-        if (-not $managementGroupId) {
-            throw "managementGroupId is required when targetScope is 'mg'."
-        }
-    }
-    'tenant' {
-        if (-not $tenantId) {
-            throw "tenantId is required when targetScope is 'tenant'."
-        }
-    }
+if (-not $scopeProfile.RequiredParameterValue) {
+    throw "$($scopeProfile.RequiredParameterName) is required when targetScope is '$targetScope'."
 }
 
 #
@@ -222,6 +314,19 @@ function Get-AzIdentity {
     )
 
     try {
+        function Write-IdentityStatusLine {
+            param (
+                [Parameter(Mandatory = $true)]
+                [string] $Label,
+
+                [Parameter(Mandatory = $true)]
+                [string] $Value
+            )
+
+            $formattedLabel = $Label.PadRight(22, '.')
+            Write-Host "${formattedLabel}: $Value"
+        }
+
         # Get Identity Type
         $azAccountJson = az account show --output json 2>&1
         if ($LASTEXITCODE -ne 0) { throw "Failed to retrieve Azure account information. Ensure you are logged in." }
@@ -237,8 +342,8 @@ function Get-AzIdentity {
             $spDisplayName = $spDetails.displayName
             $azIdentityObjectId = $spDetails.id
 
-            Write-Host "Azure Identity Type...: Service Principal"
-            Write-Host "Service Principal.....: $spDisplayName"
+            Write-IdentityStatusLine -Label 'Azure Identity Type' -Value 'Service Principal'
+            Write-IdentityStatusLine -Label 'Service Principal' -Value $spDisplayName
             $azIdentityName = $spDisplayName
 
         } elseif ($identityType -eq 'user') {
@@ -248,9 +353,9 @@ function Get-AzIdentity {
             $azUserAccountName = $signedInPrincipal
             $azIdentityObjectId = $userDetails.id
             $userDisplayName = if ($userDetails.displayName) { $userDetails.displayName } else { $azUserAccountName }
-            Write-Host "Azure Identity Type...: User"
-            Write-Host "User Account Email....: $azUserAccountName"
-            Write-Host "Display Name..........: $userDisplayName"
+            Write-IdentityStatusLine -Label 'Azure Identity Type' -Value 'User'
+            Write-IdentityStatusLine -Label 'User Account Email' -Value $azUserAccountName
+            Write-IdentityStatusLine -Label 'Display Name' -Value $userDisplayName
             $azIdentityName = $azUserAccountName
         } else {
             Write-Warning "Unknown Azure Identity Type: $identityType"
@@ -262,23 +367,35 @@ function Get-AzIdentity {
         $rbacAssignments = if ($LASTEXITCODE -eq 0 -and $rbacJson) { $rbacJson | ConvertFrom-Json } else { $null }
         if ($rbacAssignments) {
             $roles = $rbacAssignments | Select-Object -ExpandProperty roleDefinitionName -Unique
-            Write-Host "RBAC Assignments......: $($roles -join ', ')"
+            Write-IdentityStatusLine -Label 'RBAC Assignments' -Value ($roles -join ', ')
         } else {
             Write-Warning "No RBAC assignments found for the identity."
             return $azIdentityName
         }
 
         # Evaluate Owner/Contributor scoped group memberships
-        $roleCheckScope = switch ($TargetScope) {
-            'sub' { "/subscriptions/$SubscriptionId" }
-            'mg' { "/providers/Microsoft.Management/managementGroups/$ManagementGroupId" }
-            'tenant' { "/" }
+        $scopeContextProfiles = @{
+            'sub'    = @{
+                RoleCheckScope      = "/subscriptions/$SubscriptionId"
+                RoleCheckScopeLabel = "subscription $SubscriptionId"
+            }
+            'mg'     = @{
+                RoleCheckScope      = "/providers/Microsoft.Management/managementGroups/$ManagementGroupId"
+                RoleCheckScopeLabel = "management group $ManagementGroupId"
+            }
+            'tenant' = @{
+                RoleCheckScope      = '/'
+                RoleCheckScopeLabel = "tenant root ($TenantId)"
+            }
         }
-        $roleCheckScopeLabel = switch ($TargetScope) {
-            'sub' { "subscription $SubscriptionId" }
-            'mg' { "management group $ManagementGroupId" }
-            'tenant' { "tenant root ($TenantId)" }
+
+        $scopeContext = $scopeContextProfiles[$TargetScope]
+        if (-not $scopeContext) {
+            throw "Unsupported TargetScope '$TargetScope' in Get-AzIdentity."
         }
+
+        $roleCheckScope = $scopeContext.RoleCheckScope
+        $roleCheckScopeLabel = $scopeContext.RoleCheckScopeLabel
 
         $rolesToCheck = @('Owner', 'Contributor')
 
@@ -290,7 +407,7 @@ function Get-AzIdentity {
                 if ($roleAssignments) {
                     $directAssignments = $roleAssignments | Where-Object { $_.principalId -eq $azIdentityObjectId }
                     if ($directAssignments) {
-                        Write-Host "Role Assignment.......: Direct $roleName assignment detected at: $roleCheckScopeLabel"
+                        Write-IdentityStatusLine -Label 'Role Assignment' -Value "Direct $roleName assignment detected at: $roleCheckScopeLabel"
                     }
 
                     $roleGroups = $roleAssignments |
@@ -309,13 +426,7 @@ function Get-AzIdentity {
                         }
 
                         if ($membershipMatches.Count -gt 0) {
-                            Write-Host "$roleName Group Member.: $($membershipMatches -join ', ')"
-                        }
-                    }
-
-                    if (-not $directAssignments -and $membershipMatches.Count -eq 0) {
-                        if ($roleGroups) {
-                            Write-Warning "Identity is not a member of any $roleName-scoped groups at $roleCheckScopeLabel."
+                            Write-IdentityStatusLine -Label "$roleName Group Member" -Value ($membershipMatches -join ', ')
                         }
                     }
                 }
@@ -460,6 +571,7 @@ $locationShortCodeMap = @{
 
 # Create Deployment Guid for Tracking in Azure
 $deployGuid = (New-Guid).Guid
+$deployName = "iac-$($scopeProfile.DeployScopeCode)-$deployGuid"
 
 # Check Azure CLI
 Get-AzCliVersion
@@ -530,41 +642,34 @@ if (-not $azIdentityName) {
     throw "Unable to determine Azure identity and/or insufficient RBAC permissions."
 }
 
+$targetScopeDisplayName = $scopeProfile.DisplayName
+
 Write-Host ""
 Write-Host "Pre Flight Variable Validation:"
-Write-Host "Deployment Guid......: $deployGuid"
-Write-Host "Target Scope.........: $targetScope"
+Write-Host "Deployment Guid......: $deployName"
+Write-Host "Target Scope.........: $targetScopeDisplayName"
+if ($scopeProfile.ScopeContextLinePrefix) { Write-Host "$($scopeProfile.ScopeContextLinePrefix): $($scopeProfile.ScopeContextValue)" }
 Write-Host "Customer Name........: $customerName"
 Write-Host "Location.............: $location"
 Write-Host "Location Short Code..: $($locationShortCodeMap.$location)"
 Write-Host "Environment..........: $environmentType"
-if ($targetScope -eq 'mg') { Write-Host "Management Group Id..: $managementGroupId" }
-if ($targetScope -eq 'tenant') { Write-Host "Tenant Id............: $tenantId" }
 
 if ($deploy) {
-    $scopeTarget = switch ($targetScope) {
-        'sub' { "Subscription '$subscriptionId'" }
-        'mg' { "Management Group '$managementGroupId'" }
-        'tenant' { "Tenant '$tenantId'" }
-    }
-    if ($PSCmdlet.ShouldProcess($scopeTarget, "Deploy Bicep template 'main.bicep' to $location")) {
+    $scopeTarget = $scopeProfile.ScopeTarget
+    if ($PSCmdlet.ShouldProcess($scopeTarget, "Deploy Bicep template '$templateFile' to $location")) {
         $deployStartTime = Get-Date
 
         Write-Host ""
 
         # Deploy Bicep Template - Build scope-aware portal link
-        $portalDeployPath = switch ($targetScope) {
-            'sub' { "/subscriptions/$subscriptionId/providers/Microsoft.Resources/deployments/iac-$deployGuid" }
-            'mg' { "/providers/Microsoft.Management/managementGroups/$managementGroupId/providers/Microsoft.Resources/deployments/iac-$deployGuid" }
-            'tenant' { "/providers/Microsoft.Resources/deployments/iac-$deployGuid" }
-        }
+        $portalDeployPath = "$($scopeProfile.DeploymentPath)/$deployName"
         $encodedPath = $portalDeployPath -replace '/', '%2F'
-        $azDeployGuidLink = "`e]8;;https://portal.azure.com/#view/HubsExtension/DeploymentDetailsBlade/~/overview/id/$encodedPath`e\iac-$deployGuid`e]8;;`e\"
+        $azDeployGuidLink = "`e]8;;https://portal.azure.com/#view/HubsExtension/DeploymentDetailsBlade/~/overview/id/$encodedPath`e\$deployName`e]8;;`e\"
 
         $deployParams = @(
-            '--name', "iac-$deployGuid",
+            '--name', $deployName,
             '--location', $location,
-            '--template-file', './main.bicep',
+            '--template-file', $templateFile,
             '--parameters',
             "location=$location",
             "locationShortCode=$($locationShortCodeMap.$location)",
@@ -574,24 +679,15 @@ if ($deploy) {
         )
 
         # Add scope-specific arguments
-        switch ($targetScope) {
-            'sub' {
-                $deployParams += '--subscription', $subscriptionId
-            }
-            'mg' {
-                $deployParams += '--management-group-id', $managementGroupId
-            }
-            'tenant' {
-                # Tenant scope requires no additional arguments
-                # Tenant context is determined by the authenticated session
-            }
+        if ($scopeProfile.CliScopeArgName) {
+            $deployParams += $scopeProfile.CliScopeArgName, $scopeProfile.CliScopeArgValue
         }
 
         # Run what-if preview
         Write-Host "> Planned Infrastructure Changes:"
         az deployment $targetScope what-if @deployParams
 
-        if ($LASTEXITCODE -ne 0) { throw "What-If validation failed for 'iac-$deployGuid'." }
+        if ($LASTEXITCODE -ne 0) { throw "What-If validation failed for '$deployName'." }
 
         Write-Host ""
         $confirmDeploy = Read-Host "Proceed with deployment? (Y/N)"
@@ -606,7 +702,7 @@ if ($deploy) {
         # Execute deployment
         az deployment $targetScope create @deployParams --output none
 
-        if ($LASTEXITCODE -ne 0) { throw "Bicep deployment 'iac-$deployGuid' failed with exit code $LASTEXITCODE." }
+        if ($LASTEXITCODE -ne 0) { throw "Bicep deployment '$deployName' failed with exit code $LASTEXITCODE." }
 
         $deployEndTime = Get-Date
         $deploymentDuration = $deployEndTime - $deployStartTime
