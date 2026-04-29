@@ -12,8 +12,11 @@ param locationShortCode string
 @description('Customer Name')
 param customerName string
 
+@description('Project Name')
+param projectName string
+
 @description('Environment Type')
-@allowed(['dev', 'acc', 'prod'])
+@allowed(['dev', 'acc', 'prd'])
 param environmentType string
 
 @description('User Deployment Name')
@@ -29,30 +32,40 @@ param tags object = {
 //
 // Networking Mode
 
-@description('Set to true to create a new VNet, NSG and Private DNS Zones. Set to false to reference an existing hub environment.')
+@description('Set to true to create a new VNet, NSG and Private DNS Zones. Set to false to reference an existing spoke VNet + shared hub Private DNS Zones.')
 param enableCreateVirtualNetwork bool
 
-// Existing Hub Environment Parameters (required when enableCreateVirtualNetwork = false)
+//
+// Existing Spoke VNet Parameters (subnets used for private endpoints + outbound VNet integration)
+// Required when enableCreateVirtualNetwork = false
 
-@description('Subscription ID of the existing shared hub VNet. Required when enableCreateVirtualNetwork is false.')
-param sharedHubSubscriptionId string
+@description('Subscription ID of the existing spoke VNet that hosts the PE + outbound subnets.')
+param existingVirtualNetworkSubscriptionId string = ''
 
-@description('Resource Group name containing the existing shared hub VNet. Required when enableCreateVirtualNetwork is false.')
-param sharedHubResourceGroupName string
+@description('Resource Group name containing the existing spoke VNet.')
+param existingVirtualNetworkResourceGroupName string = ''
 
-@description('Name of the existing shared hub VNet. Required when enableCreateVirtualNetwork is false.')
-param sharedHubVirtualNetworkName string
+@description('Name of the existing spoke VNet.')
+param existingVirtualNetworkName string = ''
 
-@description('Name of the existing shared/private-endpoint subnet. Required when enableCreateVirtualNetwork is false.')
-param sharedHubSubnetShared string
+@description('Name of the existing shared/private-endpoint subnet in the spoke VNet.')
+param existingSubnetShared string = ''
 
-@description('Name of the existing function app outbound subnet. Required when enableCreateVirtualNetwork is false.')
-param sharedHubSubnetOutbound string
+@description('Name of the existing function app outbound (delegated) subnet in the spoke VNet.')
+param existingSubnetOutbound string = ''
 
-// Azure Private DNS Zones
+//
+// Shared Hub Private DNS Zone Parameters (typically a separate central subscription)
+// Required when enableCreateVirtualNetwork = false
+
+@description('Subscription ID containing the shared hub Private DNS Zones.')
+param sharedHubSubscriptionId string = ''
+
+@description('Resource Group containing the shared hub Private DNS Zones.')
+param sharedHubPrivateDnsZoneResourceGroupName string = ''
+
 // Private DNS Zone names for private endpoints
-
-var privateDnsZoneArray array = [
+var privateDnsZoneArray = [
   'privatelink.vaultcore.azure.net' // [0]
   'privatelink.blob.${environment().suffixes.storage}' // [1]
   'privatelink.queue.${environment().suffixes.storage}' // [2]
@@ -60,39 +73,36 @@ var privateDnsZoneArray array = [
   'privatelink.azurewebsites.net' // [4]
 ]
 
-@description('Resource Group containing existing Private DNS Zones. Required when enableCreateVirtualNetwork is false.')
-param sharedHubPrivateDnsZoneResourceGroupName string = ''
-
 //
 // Resource Names
 
-var resourceGroupName = 'rg-x-${customerName}-example-${environmentType}-${locationShortCode}'
-var virtualNetworkName = 'vnet-${customerName}-example-${environmentType}-${locationShortCode}'
-var networkSecurityGroupName = 'nsg-${customerName}-example-${environmentType}-${locationShortCode}'
-var userManagedIdentityName = 'id-${customerName}-example-${environmentType}-${locationShortCode}'
-var keyvaultName = 'kv-${customerName}-example-${environmentType}-${locationShortCode}'
-var storageAccountName = 'st${customerName}example${environmentType}${locationShortCode}'
-var logAnalyticsName = 'log-${customerName}-example-${environmentType}-${locationShortCode}'
-var applicationInsightsName = 'appi-${customerName}-example-${environmentType}-${locationShortCode}'
-var appServicePlanName = 'asp-${customerName}-example-${environmentType}-${locationShortCode}'
-var functionAppName = 'func-${customerName}-example-${environmentType}-${locationShortCode}'
+var resourceGroupName = 'rg-${customerName}-${projectName}-${environmentType}-${locationShortCode}'
+var virtualNetworkName = 'vnet-${customerName}-${projectName}-${environmentType}-${locationShortCode}'
+var networkSecurityGroupName = 'nsg-${customerName}-${projectName}-${environmentType}-${locationShortCode}'
+var userManagedIdentityName = 'id-${customerName}-${projectName}-${environmentType}-${locationShortCode}'
+var keyvaultName = 'kv${customerName}${projectName}${environmentType}${locationShortCode}'
+var storageAccountName = 'st${customerName}${projectName}${environmentType}${locationShortCode}'
+var logAnalyticsName = 'log-${customerName}-${projectName}-${environmentType}-${locationShortCode}'
+var applicationInsightsName = 'appi-${customerName}-${projectName}-${environmentType}-${locationShortCode}'
+var appServicePlanName = 'asp-${customerName}-${projectName}-${environmentType}-${locationShortCode}'
+var functionAppName = 'func-${customerName}-${projectName}-${environmentType}-${locationShortCode}'
 
 //
 // Existing Hub Resource References (used when enableCreateVirtualNetwork = false)
 
-resource existingHubVirtualNetwork 'Microsoft.Network/virtualNetworks@2024-05-01' existing = if (!enableCreateVirtualNetwork) {
-  name: sharedHubVirtualNetworkName
-  scope: resourceGroup(sharedHubSubscriptionId, sharedHubResourceGroupName)
+resource existingSpokeVirtualNetwork 'Microsoft.Network/virtualNetworks@2024-05-01' existing = if (!enableCreateVirtualNetwork) {
+  name: existingVirtualNetworkName
+  scope: resourceGroup(existingVirtualNetworkSubscriptionId, existingVirtualNetworkResourceGroupName)
 }
 
-resource existingHubSubnetShared 'Microsoft.Network/virtualNetworks/subnets@2024-05-01' existing = if (!enableCreateVirtualNetwork) {
-  name: sharedHubSubnetShared
-  parent: existingHubVirtualNetwork
+resource existingSpokeSubnetShared 'Microsoft.Network/virtualNetworks/subnets@2024-05-01' existing = if (!enableCreateVirtualNetwork) {
+  name: existingSubnetShared
+  parent: existingSpokeVirtualNetwork
 }
 
-resource existingHubSubnetOutbound 'Microsoft.Network/virtualNetworks/subnets@2024-05-01' existing = if (!enableCreateVirtualNetwork) {
-  name: sharedHubSubnetOutbound
-  parent: existingHubVirtualNetwork
+resource existingSpokeSubnetOutbound 'Microsoft.Network/virtualNetworks/subnets@2024-05-01' existing = if (!enableCreateVirtualNetwork) {
+  name: existingSubnetOutbound
+  parent: existingSpokeVirtualNetwork
 }
 
 resource existingPrivateDnsZoneVault 'Microsoft.Network/privateDnsZones@2024-06-01' existing = if (!enableCreateVirtualNetwork) {
@@ -125,10 +135,10 @@ resource existingPrivateDnsZoneWebsites 'Microsoft.Network/privateDnsZones@2024-
 
 var subnetSharedResourceId = enableCreateVirtualNetwork
   ? createVirtualNetwork.outputs.subnetResourceIds[0]
-  : existingHubSubnetShared.id
+  : existingSpokeSubnetShared.id
 var subnetOutboundResourceId = enableCreateVirtualNetwork
   ? createVirtualNetwork.outputs.subnetResourceIds[1]
-  : existingHubSubnetOutbound.id
+  : existingSpokeSubnetOutbound.id
 var privateDnsZoneVaultId = enableCreateVirtualNetwork
   ? createPrivateDnsZoneArray[0].outputs.resourceId
   : existingPrivateDnsZoneVault.id
@@ -461,7 +471,7 @@ module createFunctionApp 'br/public:avm/res/web/site:0.22.0' = {
       }
       scaleAndConcurrency: {
         instanceMemoryMB: 2048
-        maximumInstanceCount:100
+        maximumInstanceCount: 100
       }
     }
     siteConfig: {

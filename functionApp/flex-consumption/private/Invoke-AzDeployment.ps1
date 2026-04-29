@@ -70,7 +70,7 @@ param (
     [ValidatePattern('^[0-9a-fA-F]{8}-([0-9a-fA-F]{4}-){3}[0-9a-fA-F]{12}$')] [string] $subscriptionId,
 
     [Parameter(Mandatory = $true, Position = 4, HelpMessage = "Environment Type is required")]
-    [ValidateSet('dev', 'acc', 'prod')][string] $environmentType,
+    [ValidateSet('dev', 'acc', 'prd')][string] $environmentType,
 
     [Parameter(Mandatory = $true, Position = 5, HelpMessage = "Customer Name")]
     [string] $customerName,
