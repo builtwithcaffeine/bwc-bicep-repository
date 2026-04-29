@@ -50,12 +50,13 @@ param sharedHubSubnetShared string
 param sharedHubSubnetOutbound string
 
 // Azure Private DNS Zones
-@description('Private DNS Zone names for private endpoints')
-param privateDnsZoneArray array = [
+// Private DNS Zone names for private endpoints
+
+var privateDnsZoneArray array = [
   'privatelink.vaultcore.azure.net' // [0]
-  'privatelink.blob.core.windows.net' // [1]
-  'privatelink.queue.core.windows.net' // [2]
-  'privatelink.table.core.windows.net' // [3]
+  'privatelink.blob.${environment().suffixes.storage}' // [1]
+  'privatelink.queue.${environment().suffixes.storage}' // [2]
+  'privatelink.table.${environment().suffixes.storage}' // [3]
   'privatelink.azurewebsites.net' // [4]
 ]
 
@@ -282,11 +283,6 @@ module createStorageAccount 'br/public:avm/res/storage/storage-account:0.32.0' =
     defaultToOAuthAuthentication: true
     roleAssignments: [
       {
-        roleDefinitionIdOrName: 'Storage Account Contributor'
-        principalType: 'ServicePrincipal'
-        principalId: createUserManagedIdentity.outputs.principalId
-      }
-      {
         roleDefinitionIdOrName: 'Storage Blob Data Contributor'
         principalType: 'ServicePrincipal'
         principalId: createUserManagedIdentity.outputs.principalId
@@ -367,7 +363,7 @@ module createLogAnalyticsWorkspace 'br/public:avm/res/operational-insights/works
     name: logAnalyticsName
     location: location
     skuName: 'PerGB2018'
-    dataRetention: 30
+    dataRetention: 90
     tags: tags
   }
   dependsOn: [
@@ -464,8 +460,8 @@ module createFunctionApp 'br/public:avm/res/web/site:0.22.0' = {
         }
       }
       scaleAndConcurrency: {
-        instanceMemoryMB: 512
-        maximumInstanceCount: 100
+        instanceMemoryMB: 2048
+        maximumInstanceCount:100
       }
     }
     siteConfig: {
