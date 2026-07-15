@@ -22,7 +22,7 @@ winget install --id Microsoft.AzureCLI
 az bicep install
 ```
 
-> Check **Bicep Version**
+> **Check Bicep Version**
 
 ```
 az bicep version
