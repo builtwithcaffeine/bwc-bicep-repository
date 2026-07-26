@@ -1,7 +1,10 @@
-targetScope = 'subscription' // Please Update this based on deploymentScope Variable
+targetScope = 'subscription'
 
 //
 // Imported Parameters
+
+@description('Customer Name')
+param customerName string
 
 @description('Azure Location')
 param location string
@@ -22,19 +25,19 @@ param tags object = {
   deployedDate: utcNow('yyyy-MM-dd')
 }
 
-@description('Recovery Service Vault Name')
-param rsvName string = 'rsv-builtwithcaffeine-${environmentType}-${locationShortCode}'
-
 //
 // Bicep Deployment Variables
 
-var resourceGroupName = 'rg-recovery-service-vault-${environmentType}-${locationShortCode}'
+
+@description('Recovery Service Vault Name')
+var resourceGroupName = 'rg-${customerName}-rsv-${environmentType}-${locationShortCode}'
+var recoveryServiceVaultName string = 'rsv-${customerName}-${environmentType}-${locationShortCode}'
 
 //
 // Azure Verified Modules - No Hard Coded Values below this line!
 
-module createResourceGroup 'br/public:avm/res/resources/resource-group:0.4.0' = {
-  name: 'createResourceGroup'
+module createResourceGroup 'br/public:avm/res/resources/resource-group:0.4.3' = {
+  name: 'create-resource-group-${locationShortCode}'
   params: {
     name: resourceGroupName
     location: location
@@ -42,24 +45,51 @@ module createResourceGroup 'br/public:avm/res/resources/resource-group:0.4.0' = 
   }
 }
 
-module createRecoveryServiceVault 'br/public:avm/res/recovery-services/vault:0.5.1' = {
-  name: 'vaultDeployment'
+module createRecoveryServiceVault 'br/public:avm/res/recovery-services/vault:0.13.0' = {
+  name: 'create-rsv-${locationShortCode}'
   scope: resourceGroup(resourceGroupName)
   params: {
-    name: rsvName
+    name: recoveryServiceVaultName
     location: location
-    replicationAlertSettings: {
-      customEmailAddresses: [
-        'test.user@testcompany.com'
-      ]
-      locale: 'en-US'
-      sendToOwners: 'Send'
+    backupConfig: {
+      storageType:  'GeoRedundant'
     }
-    securitySettings: {
-      immutabilitySettings: {
-        state: 'Unlocked'
+    backupPolicies: [
+      {
+        name: 'pol-vm-daily-14day'
+        properties: {
+          backupManagementType: 'AzureIaasVM'
+          policyType: 'V2'
+          instantRPDetails: {
+            azureBackupRGNamePrefix: 'rg-${customerName}-rsv-restore-${environmentType}-${locationShortCode}'
+          }
+          schedulePolicy: {
+            schedulePolicyType: 'SimpleSchedulePolicyV2'
+            scheduleRunFrequency: 'Daily'
+            dailySchedule: {
+              scheduleRunTimes: [
+                '2000-01-01T22:00:00Z'
+              ]
+            }
+          }
+          retentionPolicy: {
+            retentionPolicyType: 'LongTermRetentionPolicy'
+            dailySchedule: {
+              retentionTimes: [
+                '2000-01-01T22:00:00Z'
+              ]
+              retentionDuration: {
+                count: 14
+                durationType: 'Days'
+              }
+            }
+          }
+          instantRpRetentionRangeInDays: 2
+          timeZone: 'UTC'
+        }
       }
-    }
+    ]
+    tags: tags
   }
   dependsOn: [
     createResourceGroup
