@@ -25,18 +25,21 @@ param tags object = {
   deployedDate: utcNow('yyyy-MM-dd')
 }
 
+@description('Deploy a public Blob Storage container for Application Gateway custom status pages')
+param enableAgwStorageStatus bool = false
+
 //
 // Bicep Deployment Variables
 
-var resourceGroupName = 'rg-x-${customerName}-agw-${environmentType}-${locationShortCode}'
-var logAnalyticsWorkspaceName = 'log-${customerName}-agwdiags-${environmentType}-${locationShortCode}'
-var virtualNetworkName = 'vnet-agw-${customerName}-${environmentType}-${locationShortCode}'
-var networkSecurityGroupName = 'nsg-agw-${customerName}-${environmentType}-${locationShortCode}'
-var applicationGatewayWafName = 'waf-agw-${customerName}-${environmentType}-${locationShortCode}'
-var applicationGatewayPublicIpName = 'pip-agw-${customerName}-${environmentType}-${locationShortCode}'
-var applicationGatewayDnsFqdn = 'agw-${customerName}-primary-${environmentType}'
-var applicationGatewayName = 'agw-${customerName}-${environmentType}-${locationShortCode}'
-var applicationGatewaySku = 'WAF_v2'
+var resourceGroupName = 'rg-x-${customerName}-agw-shared-${environmentType}-${locationShortCode}'
+var storageAccountName = 'st${customerName}agwstatus${environmentType}${locationShortCode}'
+var logAnalyticsWorkspaceName = 'log-${customerName}-agw-shared-${environmentType}-${locationShortCode}'
+var virtualNetworkName = 'vnet-${customerName}-agw-shared-${environmentType}-${locationShortCode}'
+var networkSecurityGroupName = 'nsg-${customerName}-agw-shared-${environmentType}-${locationShortCode}'
+var applicationGatewayWafPolicyName = 'wafpol-${customerName}-agw-shared-${environmentType}-${locationShortCode}'
+var applicationGatewayPublicIpName = 'pip-${customerName}-agw-shared-${environmentType}-${locationShortCode}'
+var applicationGatewayDnsFqdn = 'agw-${customerName}-shared-${environmentType}'
+var applicationGatewayName = 'agw-${customerName}-shared-${environmentType}-${locationShortCode}-01'
 
 //
 // User-Defined Types
@@ -125,7 +128,7 @@ param applicationGatewayManagedRules wafManagedRulesType = {
 @description('WAF Configuration - Policy Settings')
 param applicationGatewayPolicySettings wafPolicySettingsType = {
   state: 'Enabled'
-  mode: 'Detection'
+  mode: toLower(environmentType) == 'prod' ? 'Prevention' : 'Detection'
   fileUploadEnforcement: true
   requestBodyEnforcement: true
   requestBodyCheck: true
@@ -144,20 +147,169 @@ param autoscaleMinCapacity int = 1
 @maxValue(125)
 param autoscaleMaxCapacity int = 2
 
-@description('Application Gateway - Listener Host Name')
-param listenerHostName string = 'demo.builtwithcaffeine.cloud'
+@description('Log Analytics Workspace - SKU Name')
+param logAnalyticsWorkspaceSkuName string = 'PerGB2018'
+
+@description('Log Analytics Workspace - Data Retention in Days')
+@minValue(30)
+@maxValue(730)
+param logAnalyticsWorkspaceRetentionInDays int = 30
+
+@description('Application Gateway - SKU')
+@allowed([
+  'WAF_v2'
+])
+param applicationGatewaySku string = 'WAF_v2'
+
+@description('Application Gateway - Enable HTTP/2')
+param applicationGatewayEnableHttp2 bool = true
+
+@description('Application Gateway - SSL Policy Type')
+@allowed([
+  'Predefined'
+])
+param applicationGatewaySslPolicyType string = 'Predefined'
+
+@description('Application Gateway - SSL Policy Name')
+@allowed([
+  'AppGwSslPolicy20150501'
+  'AppGwSslPolicy20170401'
+  'AppGwSslPolicy20170401S'
+  'AppGwSslPolicy20220101'
+  'AppGwSslPolicy20220101S'
+])
+param applicationGatewaySslPolicyName string = 'AppGwSslPolicy20220101'
+
+@description('Application Gateway - Default Listener Protocol')
+@allowed([
+  'Http'
+])
+param defaultListenerProtocol string = 'Http'
+
+@description('Application Gateway - Default Listener Host Name')
+param defaultListenerHostName string
+
+@description('Application Gateway - Default Backend FQDN. Leave empty when no backend compute exists yet.')
+param defaultBackendFqdn string = ''
+
+@description('Application Gateway - Default Backend Protocol')
+@allowed([
+  'Http'
+  'Https'
+])
+param defaultBackendProtocol string = 'Http'
+
+@description('Application Gateway - Default Backend Port')
+@minValue(1)
+@maxValue(65535)
+param defaultBackendPort int = 80
+
+@description('Application Gateway - Default Health Probe Path')
+param defaultHealthProbePath string = '/'
+
+@description('Application Gateway - Default Health Probe Interval in Seconds')
+@minValue(1)
+param defaultHealthProbeIntervalInSeconds int = 30
+
+@description('Application Gateway - Default Health Probe Timeout in Seconds')
+@minValue(1)
+param defaultHealthProbeTimeoutInSeconds int = 30
+
+@description('Application Gateway - Default Health Probe Unhealthy Threshold')
+@minValue(1)
+@maxValue(20)
+param defaultHealthProbeUnhealthyThreshold int = 3
+
+@description('Application Gateway - Default Route Priority')
+@minValue(1)
+@maxValue(20000)
+param defaultRoutePriority int = 100
 
 //
 // Variables
 
-var enableHttp2 = true
+var networkSecurityRules = [
+  {
+    name: 'Allow-GatewayManager-Inbound'
+    properties: {
+      priority: 100
+      direction: 'Inbound'
+      access: 'Allow'
+      protocol: 'Tcp'
+      sourcePortRange: '*'
+      destinationPortRange: '65200-65535'
+      sourceAddressPrefix: 'GatewayManager'
+      destinationAddressPrefix: '*'
+    }
+  }
+  {
+    name: 'Allow-AzureLoadBalancer-Inbound'
+    properties: {
+      priority: 110
+      direction: 'Inbound'
+      access: 'Allow'
+      protocol: '*'
+      sourcePortRange: '*'
+      destinationPortRange: '*'
+      sourceAddressPrefix: 'AzureLoadBalancer'
+      destinationAddressPrefix: '*'
+    }
+  }
+  {
+    name: 'Allow-HTTP-Inbound'
+    properties: {
+      priority: 200
+      direction: 'Inbound'
+      access: 'Allow'
+      protocol: 'Tcp'
+      sourcePortRange: '*'
+      destinationPortRange: '80'
+      sourceAddressPrefix: '*'
+      destinationAddressPrefix: '*'
+    }
+  }
+  {
+    name: 'Allow-HTTPS-Inbound'
+    properties: {
+      priority: 210
+      direction: 'Inbound'
+      access: 'Allow'
+      protocol: 'Tcp'
+      sourcePortRange: '*'
+      destinationPortRange: '443'
+      sourceAddressPrefix: '*'
+      destinationAddressPrefix: '*'
+    }
+  }
+]
+
 var applicationGatewayResourceIdPath = '/subscriptions/${subscription().subscriptionId}/resourceGroups/${resourceGroupName}/providers/Microsoft.Network/applicationGateways/${applicationGatewayName}'
+var hasDefaultBackend = !empty(defaultBackendFqdn)
+var defaultListenerProtocolName = toLower(defaultListenerProtocol)
+var defaultBackendProtocolName = toLower(defaultBackendProtocol)
+var applicationGatewayDefaultAppName = defaultListenerHostName
+
+// Application Gateway child-resource naming standard:
+// - Backend pool: bep-<app>
+// - Backend settings: bes-<app>-<protocol>
+// - Listener: <protocol>-<hostname>
+// - Routing rule: rule-<app>
+// - Health probe: probe-<app>-<protocol>
+// - Redirect config: rdc-<purpose>
+// - Rewrite rule set: rrs-<purpose>
+// - URL path map: upm-<app>
+
+var applicationGatewayDefaultHttpListenerName = '${defaultListenerProtocolName}-${defaultListenerHostName}'
+var applicationGatewayDefaultBackendAddressPoolName = 'bep-${applicationGatewayDefaultAppName}'
+var applicationGatewayDefaultBackendHttpSettingsName = 'bes-${applicationGatewayDefaultAppName}-${defaultBackendProtocolName}'
+var applicationGatewayDefaultHealthProbeName = 'probe-${applicationGatewayDefaultAppName}-${defaultBackendProtocolName}'
+var applicationGatewayDefaultRouteName = 'rule-${applicationGatewayDefaultAppName}'
 
 //
 // Azure Verified Modules - No Hard Coded Values below this line!
 
-module createResourceGroup 'br/public:avm/res/resources/resource-group:0.4.3' = {
-  name: 'create-resource-group'
+module createResourceGroup 'br/public:avm/res/resources/resource-group:0.4.4' = {
+  name: 'create-resource-group-${locationShortCode}'
   params: {
     name: resourceGroupName
     location: location
@@ -165,13 +317,44 @@ module createResourceGroup 'br/public:avm/res/resources/resource-group:0.4.3' = 
   }
 }
 
-module createLogAnalyticsWorkspace 'br/public:avm/res/operational-insights/workspace:0.15.0' = {
-  name: 'create-log-analytics-workspace'
+module createStorageAccount 'br/public:avm/res/storage/storage-account:0.33.0' = if (enableAgwStorageStatus) {
+  name: 'create-storage-account-${locationShortCode}'
+  scope: resourceGroup(resourceGroupName)
+  params: {
+    name: storageAccountName
+    location: location
+    skuName: 'Standard_LRS'
+    kind: 'StorageV2'
+    accessTier: 'Hot'
+    allowBlobPublicAccess: true
+    publicNetworkAccess: 'Enabled'
+    networkAcls: {
+      defaultAction: 'Allow'
+      bypass: 'AzureServices'
+    }
+    blobServices: {
+      containers: [
+        {
+          name: 'status-codes'
+          publicAccess: 'Blob'
+        }
+      ]
+    }
+    tags: tags
+  }
+  dependsOn: [
+    createResourceGroup
+  ]
+}
+
+module createLogAnalyticsWorkspace 'br/public:avm/res/operational-insights/workspace:0.16.1' = {
+  name: 'create-log-analytics-workspace-${locationShortCode}'
   scope: resourceGroup(resourceGroupName)
   params: {
     name: logAnalyticsWorkspaceName
     location: location
-    dataRetention: 30
+    skuName: logAnalyticsWorkspaceSkuName
+    dataRetention: logAnalyticsWorkspaceRetentionInDays
     tags: tags
   }
   dependsOn: [
@@ -179,66 +362,13 @@ module createLogAnalyticsWorkspace 'br/public:avm/res/operational-insights/works
   ]
 }
 
-module createNetworkSecurityGroup 'br/public:avm/res/network/network-security-group:0.5.0' = {
-  name: 'create-network-security-group'
+module createNetworkSecurityGroup 'br/public:avm/res/network/network-security-group:0.5.3' = {
+  name: 'create-network-security-group-${locationShortCode}'
   scope: resourceGroup(resourceGroupName)
   params: {
     name: networkSecurityGroupName
     location: location
-    securityRules: [
-      {
-        name: 'Allow-GatewayManager-Inbound'
-        properties: {
-          priority: 100
-          direction: 'Inbound'
-          access: 'Allow'
-          protocol: 'Tcp'
-          sourceAddressPrefix: 'GatewayManager'
-          sourcePortRange: '*'
-          destinationAddressPrefix: '*'
-          destinationPortRange: '65200-65535'
-        }
-      }
-      {
-        name: 'Allow-AzureLoadBalancer-Inbound'
-        properties: {
-          priority: 110
-          direction: 'Inbound'
-          access: 'Allow'
-          protocol: '*'
-          sourceAddressPrefix: 'AzureLoadBalancer'
-          sourcePortRange: '*'
-          destinationAddressPrefix: '*'
-          destinationPortRange: '*'
-        }
-      }
-      {
-        name: 'Allow-HTTP-Inbound'
-        properties: {
-          priority: 200
-          direction: 'Inbound'
-          access: 'Allow'
-          protocol: 'Tcp'
-          sourceAddressPrefix: 'Internet'
-          sourcePortRange: '*'
-          destinationAddressPrefix: 'VirtualNetwork'
-          destinationPortRange: '80'
-        }
-      }
-      {
-        name: 'Allow-HTTPS-Inbound'
-        properties: {
-          priority: 210
-          direction: 'Inbound'
-          access: 'Allow'
-          protocol: 'Tcp'
-          sourceAddressPrefix: 'Internet'
-          sourcePortRange: '*'
-          destinationAddressPrefix: 'VirtualNetwork'
-          destinationPortRange: '443'
-        }
-      }
-    ]
+    securityRules: networkSecurityRules
     tags: tags
   }
   dependsOn: [
@@ -246,8 +376,8 @@ module createNetworkSecurityGroup 'br/public:avm/res/network/network-security-gr
   ]
 }
 
-module createVirtualNetwork 'br/public:avm/res/network/virtual-network:0.7.2' = {
-  name: 'create-virtual-network'
+module createVirtualNetwork 'br/public:avm/res/network/virtual-network:0.10.2' = {
+  name: 'create-virtual-network-${locationShortCode}'
   scope: resourceGroup(resourceGroupName)
   params: {
     name: virtualNetworkName
@@ -267,11 +397,11 @@ module createVirtualNetwork 'br/public:avm/res/network/virtual-network:0.7.2' = 
   ]
 }
 
-module createApplicationGatewayWaf 'br/public:avm/res/network/application-gateway-web-application-firewall-policy:0.2.0' = {
-  name: 'create-application-gateway-waf'
+module createApplicationGatewayWaf 'br/public:avm/res/network/application-gateway-web-application-firewall-policy:0.3.0' = {
+  name: 'create-application-gateway-waf-${locationShortCode}'
   scope: resourceGroup(resourceGroupName)
   params: {
-    name: applicationGatewayWafName
+    name: applicationGatewayWafPolicyName
     location: location
     managedRules: applicationGatewayManagedRules
     policySettings: applicationGatewayPolicySettings
@@ -282,8 +412,8 @@ module createApplicationGatewayWaf 'br/public:avm/res/network/application-gatewa
   ]
 }
 
-module createApplicationGatewayPublicIp 'br/public:avm/res/network/public-ip-address:0.9.0' = {
-  name: 'create-application-gateway-public-ip'
+module createApplicationGatewayPublicIp 'br/public:avm/res/network/public-ip-address:0.13.0' = {
+  name: 'create-application-gateway-public-ip-${locationShortCode}'
   scope: resourceGroup(resourceGroupName)
   params: {
     name: applicationGatewayPublicIpName
@@ -302,16 +432,16 @@ module createApplicationGatewayPublicIp 'br/public:avm/res/network/public-ip-add
   ]
 }
 
-module createApplicationGateway 'br/public:avm/res/network/application-gateway:0.7.0' = {
-  name: 'create-application-gateway'
+module createApplicationGateway 'br/public:avm/res/network/application-gateway:0.10.0' = {
+  name: 'create-application-gateway-${locationShortCode}'
   scope: resourceGroup(resourceGroupName)
   params: {
     name: applicationGatewayName
     location: location
-    enableHttp2: enableHttp2
+    enableHttp2: applicationGatewayEnableHttp2
     sku: applicationGatewaySku
-    sslPolicyType: 'Predefined'
-    sslPolicyName: 'AppGwSslPolicy20220101'
+    sslPolicyType: applicationGatewaySslPolicyType
+    sslPolicyName: applicationGatewaySslPolicyName
     firewallPolicyResourceId: createApplicationGatewayWaf.outputs.resourceId
     autoscaleMinCapacity: autoscaleMinCapacity
     autoscaleMaxCapacity: autoscaleMaxCapacity
@@ -351,40 +481,48 @@ module createApplicationGateway 'br/public:avm/res/network/application-gateway:0
     ]
     backendAddressPools: [
       {
-        name: 'bp-demo.builtwithcaffeine.cloud'
-      }
-    ]
-    probes: [
-      {
-        name: 'hp-demo.builtwithcaffeine.cloud'
+        name: applicationGatewayDefaultBackendAddressPoolName
         properties: {
-          protocol: 'Http'
-          path: '/'
-          interval: 30
-          timeout: 30
-          unhealthyThreshold: 3
-          pickHostNameFromBackendHttpSettings: true
+          backendAddresses: hasDefaultBackend ? [
+            {
+              fqdn: defaultBackendFqdn
+            }
+          ] : []
         }
       }
     ]
+    probes: hasDefaultBackend ? [
+      {
+        name: applicationGatewayDefaultHealthProbeName
+        properties: {
+          protocol: defaultBackendProtocol
+          host: defaultBackendFqdn
+          path: defaultHealthProbePath
+          interval: defaultHealthProbeIntervalInSeconds
+          timeout: defaultHealthProbeTimeoutInSeconds
+          unhealthyThreshold: defaultHealthProbeUnhealthyThreshold
+        }
+      }
+    ] : []
     backendHttpSettingsCollection: [
       {
-        name: 'bs-demo.builtwithcaffeine.cloud'
-        properties: {
+        name: applicationGatewayDefaultBackendHttpSettingsName
+        properties: union({
           cookieBasedAffinity: 'Disabled'
-          port: 80
-          protocol: 'Http'
-          hostName: listenerHostName
-          pickHostNameFromBackendAddress: true
+          port: defaultBackendPort
+          protocol: defaultBackendProtocol
+        }, hasDefaultBackend ? {
+          hostName: defaultBackendFqdn
+          pickHostNameFromBackendAddress: false
           probe: {
-            id: '${applicationGatewayResourceIdPath}/probes/hp-demo.builtwithcaffeine.cloud'
+            id: '${applicationGatewayResourceIdPath}/probes/${applicationGatewayDefaultHealthProbeName}'
           }
-        }
+        } : {})
       }
     ]
     httpListeners: [
       {
-        name: 'http-demo.builtwithcaffeine.cloud'
+        name: applicationGatewayDefaultHttpListenerName
         properties: {
           frontendIPConfiguration: {
             id: '${applicationGatewayResourceIdPath}/frontendIPConfigurations/publicIPConfig1'
@@ -392,25 +530,25 @@ module createApplicationGateway 'br/public:avm/res/network/application-gateway:0
           frontendPort: {
             id: '${applicationGatewayResourceIdPath}/frontendPorts/frontendPort-http'
           }
-          hostName: listenerHostName
-          protocol: 'Http'
+          protocol: defaultListenerProtocol
+          hostName: defaultListenerHostName
         }
       }
     ]
     requestRoutingRules: [
       {
-        name: 'rule-demo.builtwithcaffeine.cloud'
+        name: applicationGatewayDefaultRouteName
         properties: {
           backendAddressPool: {
-            id: '${applicationGatewayResourceIdPath}/backendAddressPools/bp-demo.builtwithcaffeine.cloud'
+            id: '${applicationGatewayResourceIdPath}/backendAddressPools/${applicationGatewayDefaultBackendAddressPoolName}'
           }
           backendHttpSettings: {
-            id: '${applicationGatewayResourceIdPath}/backendHttpSettingsCollection/bs-demo.builtwithcaffeine.cloud'
+            id: '${applicationGatewayResourceIdPath}/backendHttpSettingsCollection/${applicationGatewayDefaultBackendHttpSettingsName}'
           }
           httpListener: {
-            id: '${applicationGatewayResourceIdPath}/httpListeners/http-demo.builtwithcaffeine.cloud'
+            id: '${applicationGatewayResourceIdPath}/httpListeners/${applicationGatewayDefaultHttpListenerName}'
           }
-          priority: 100
+          priority: defaultRoutePriority
           ruleType: 'Basic'
         }
       }

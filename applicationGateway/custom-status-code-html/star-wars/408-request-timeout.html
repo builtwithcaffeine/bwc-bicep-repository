@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex, nofollow">
+  <title>408 - Request Timeout</title>
+  <style>
+    :root { color-scheme: dark; --gold: #facc15; --cyan: #22d3ee; --panel: rgba(6, 25, 37, .86); --text: #ecfeff; --muted: #a5f3fc; }
+    * { box-sizing: border-box; }
+    body { margin: 0; min-height: 100vh; display: grid; place-items: center; padding: 2rem; overflow: hidden; color: var(--text); font-family: Eurostile, Bank Gothic, Orbitron, Rajdhani, system-ui, sans-serif; background: radial-gradient(circle at 18% 16%, rgba(34,211,238,.2), transparent 21rem), radial-gradient(circle at 82% 14%, rgba(250,204,21,.12), transparent 22rem), #020617; }
+    body::before { content: ""; position: fixed; inset: 0; background-image: radial-gradient(#fff 1px, transparent 1px), radial-gradient(#67e8f9 1px, transparent 1px); background-size: 43px 43px, 109px 109px; background-position: 0 0, 23px 31px; opacity: .24; }
+    main { position: relative; width: min(100%, 48rem); padding: clamp(2rem, 5vw, 4rem); border: 1px solid rgba(34,211,238,.42); border-radius: 1.6rem; background: linear-gradient(145deg, var(--panel), rgba(15,23,42,.68)); box-shadow: 0 0 4rem rgba(34,211,238,.18), inset 0 0 2rem rgba(250,204,21,.05); }
+    .status { color: var(--cyan); font-weight: 900; letter-spacing: .22em; text-transform: uppercase; }
+    h1 { margin: 1rem 0; font-size: clamp(2.4rem, 8vw, 5.2rem); line-height: .95; text-transform: uppercase; letter-spacing: -.04em; text-shadow: 0 0 1.4rem rgba(34,211,238,.22); }
+    p { margin: 0; max-width: 40rem; color: var(--muted); font-size: clamp(1rem, 2vw, 1.2rem); line-height: 1.75; }
+    .scan { margin-top: 1.5rem; color: var(--gold); font-size: .95rem; letter-spacing: .08em; text-transform: uppercase; }
+    code { color: var(--cyan); background: rgba(34,211,238,.12); padding: .14rem .38rem; border-radius: .35rem; }
+  </style>
+</head>
+<body>
+  <main>
+    <div class="status">Galactic status 408</div>
+    <h1>Signal faded</h1>
+    <p>The transmission window closed before the request completed. Network conditions may have interrupted the signal.</p>
+    <p class="scan">Diagnostics: report code <code>408</code> to mission control.</p>
+  </main>
+</body>
+</html>
