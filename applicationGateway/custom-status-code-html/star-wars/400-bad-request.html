@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex, nofollow">
+  <title>400 - Bad Request</title>
+  <style>
+    :root { color-scheme: dark; --gold: #facc15; --blue: #38bdf8; --panel: rgba(8, 13, 32, .84); --text: #f8fafc; --muted: #cbd5e1; }
+    * { box-sizing: border-box; }
+    body { margin: 0; min-height: 100vh; display: grid; place-items: center; padding: 2rem; overflow: hidden; color: var(--text); font-family: Eurostile, Bank Gothic, Orbitron, Rajdhani, system-ui, sans-serif; background: radial-gradient(circle at 20% 20%, rgba(56,189,248,.18), transparent 22rem), radial-gradient(circle at 80% 10%, rgba(250,204,21,.16), transparent 20rem), #020617; }
+    body::before { content: ""; position: fixed; inset: 0; background-image: radial-gradient(#fff 1px, transparent 1px), radial-gradient(#93c5fd 1px, transparent 1px); background-size: 43px 43px, 97px 97px; background-position: 0 0, 19px 31px; opacity: .28; }
+    main { position: relative; width: min(100%, 48rem); padding: clamp(2rem, 5vw, 4rem); border: 1px solid rgba(250,204,21,.38); border-radius: 1.6rem; background: linear-gradient(145deg, var(--panel), rgba(15,23,42,.72)); box-shadow: 0 0 4rem rgba(56,189,248,.18), inset 0 0 2rem rgba(250,204,21,.05); }
+    .status { color: var(--gold); font-weight: 900; letter-spacing: .22em; text-transform: uppercase; }
+    h1 { margin: 1rem 0; font-size: clamp(2.4rem, 8vw, 5.2rem); line-height: .95; text-transform: uppercase; letter-spacing: -.04em; text-shadow: 0 0 1.4rem rgba(250,204,21,.22); }
+    p { margin: 0; max-width: 40rem; color: var(--muted); font-size: clamp(1rem, 2vw, 1.2rem); line-height: 1.75; }
+    .scan { margin-top: 1.5rem; color: var(--blue); font-size: .95rem; letter-spacing: .08em; text-transform: uppercase; }
+    code { color: var(--gold); background: rgba(250,204,21,.1); padding: .14rem .38rem; border-radius: .35rem; }
+  </style>
+</head>
+<body>
+  <main>
+    <div class="status">Galactic status 400</div>
+    <h1>Bad transmission</h1>
+    <p>The request coordinates were malformed or incomplete. Recheck the navigation data and transmit again.</p>
+    <p class="scan">Diagnostics: report code <code>400</code> to mission control.</p>
+  </main>
+</body>
+</html>

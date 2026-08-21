@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex, nofollow">
+  <title>405 - Method Not Allowed</title>
+  <style>
+    :root { --accent: #a78bfa; --accent-2: #22d3ee; --bg: #18181b; --text: #f5f3ff; --muted: #c4b5fd; }
+    * { box-sizing: border-box; }
+    body { margin: 0; min-height: 100vh; display: grid; place-items: center; padding: 2rem; color: var(--text); font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; background: radial-gradient(circle at 15% 20%, color-mix(in srgb, var(--accent) 30%, transparent), transparent 28rem), radial-gradient(circle at 85% 15%, color-mix(in srgb, var(--accent-2) 26%, transparent), transparent 30rem), linear-gradient(135deg, #020617, var(--bg)); }
+    main { width: min(100%, 46rem); position: relative; overflow: hidden; border: 1px solid rgba(255,255,255,.14); border-radius: 2rem; padding: clamp(2rem, 5vw, 4rem); background: linear-gradient(145deg, rgba(24,24,27,.9), rgba(49,46,129,.55)); box-shadow: 0 2rem 6rem rgba(0,0,0,.38); backdrop-filter: blur(18px); }
+    .eyebrow { display: inline-flex; gap: .55rem; align-items: center; padding: .45rem .8rem; border-radius: 999px; color: #ede9fe; background: rgba(167,139,250,.16); border: 1px solid rgba(196,181,253,.26); font-size: .84rem; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; }
+    .pulse { width: .62rem; height: .62rem; border-radius: 999px; background: var(--accent); box-shadow: 0 0 0 .4rem color-mix(in srgb, var(--accent) 18%, transparent); }
+    h1 { margin: 1.4rem 0 .8rem; font-size: clamp(2.4rem, 8vw, 5rem); line-height: .95; letter-spacing: -.07em; }
+    p { margin: 0; color: var(--muted); font-size: clamp(1rem, 2vw, 1.16rem); line-height: 1.75; }
+    .hint { margin-top: 1.6rem; font-size: .92rem; color: #ddd6fe; }
+    code { color: #ede9fe; background: rgba(255,255,255,.08); padding: .15rem .38rem; border-radius: .4rem; }
+  </style>
+</head>
+<body>
+  <main aria-labelledby="page-title">
+    <div class="eyebrow"><span class="pulse"></span>Status 405</div>
+    <h1 id="page-title">Method not allowed</h1>
+    <p>The action used for this request is not supported by this page. Try refreshing, navigating from the home page, or using a standard browser link.</p>
+    <p class="hint">If this keeps happening, share the status code <code>405</code> with support.</p>
+  </main>
+</body>
+</html>
