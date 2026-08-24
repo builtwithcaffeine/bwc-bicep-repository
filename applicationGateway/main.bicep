@@ -32,6 +32,7 @@ param enableAgwStorageStatus bool = false
 // Bicep Deployment Variables
 
 var resourceGroupName = 'rg-x-${customerName}-agw-shared-${environmentType}-${locationShortCode}'
+var managedIdentityName = 'id-${applicationGatewayName}'
 var storageAccountName = 'st${customerName}agwstatus${environmentType}${locationShortCode}'
 var logAnalyticsWorkspaceName = 'log-${customerName}-agw-shared-${environmentType}-${locationShortCode}'
 var virtualNetworkName = 'vnet-${customerName}-agw-shared-${environmentType}-${locationShortCode}'
@@ -286,24 +287,22 @@ var networkSecurityRules = [
 var applicationGatewayResourceIdPath = '/subscriptions/${subscription().subscriptionId}/resourceGroups/${resourceGroupName}/providers/Microsoft.Network/applicationGateways/${applicationGatewayName}'
 var hasDefaultBackend = !empty(defaultBackendFqdn)
 var defaultListenerProtocolName = toLower(defaultListenerProtocol)
-var defaultBackendProtocolName = toLower(defaultBackendProtocol)
-var applicationGatewayDefaultAppName = defaultListenerHostName
 
 // Application Gateway child-resource naming standard:
-// - Backend pool: bep-<app>
-// - Backend settings: bes-<app>-<protocol>
+// - Backend pool: bep-<protocol>-<hostname>
+// - Backend settings: bes-<protocol>-<hostname>
 // - Listener: <protocol>-<hostname>
-// - Routing rule: rule-<app>
-// - Health probe: probe-<app>-<protocol>
+// - Routing rule: rule-<protocol>-<hostname>
+// - Health probe: probe-<protocol>-<hostname>
 // - Redirect config: rdc-<purpose>
 // - Rewrite rule set: rrs-<purpose>
-// - URL path map: upm-<app>
+// - URL path map: upm-<purpose>
 
 var applicationGatewayDefaultHttpListenerName = '${defaultListenerProtocolName}-${defaultListenerHostName}'
-var applicationGatewayDefaultBackendAddressPoolName = 'bep-${applicationGatewayDefaultAppName}'
-var applicationGatewayDefaultBackendHttpSettingsName = 'bes-${applicationGatewayDefaultAppName}-${defaultBackendProtocolName}'
-var applicationGatewayDefaultHealthProbeName = 'probe-${applicationGatewayDefaultAppName}-${defaultBackendProtocolName}'
-var applicationGatewayDefaultRouteName = 'rule-${applicationGatewayDefaultAppName}'
+var applicationGatewayDefaultBackendAddressPoolName = 'bep-${applicationGatewayDefaultHttpListenerName}'
+var applicationGatewayDefaultBackendHttpSettingsName = 'bes-${applicationGatewayDefaultHttpListenerName}'
+var applicationGatewayDefaultHealthProbeName = 'probe-${applicationGatewayDefaultHttpListenerName}'
+var applicationGatewayDefaultRouteName = 'rule-${applicationGatewayDefaultHttpListenerName}'
 
 //
 // Azure Verified Modules - No Hard Coded Values below this line!
@@ -315,6 +314,19 @@ module createResourceGroup 'br/public:avm/res/resources/resource-group:0.4.4' = 
     location: location
     tags: tags
   }
+}
+
+module createUserManagedIdentity 'br/public:avm/res/managed-identity/user-assigned-identity:0.6.0' = {
+  name: 'create-user-managed-identity-${locationShortCode}'
+  scope: resourceGroup(resourceGroupName)
+  params: {
+    name: managedIdentityName
+    location: location
+    tags: tags
+  }
+  dependsOn: [
+    createResourceGroup
+  ]
 }
 
 module createStorageAccount 'br/public:avm/res/storage/storage-account:0.33.0' = if (enableAgwStorageStatus) {
