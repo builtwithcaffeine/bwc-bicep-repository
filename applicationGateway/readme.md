@@ -60,3 +60,8 @@ For example, a default HTTP listener for `app.contoso.com` uses:
 The backend address is populated and the health probe is created when
 `defaultBackendFqdn` is not empty. The backend settings, listener, and routing
 rule are always configured.
+
+## Troubleshooting diagnostics
+
+Read-only diagnostics and audit scripts for existing deployments are documented
+in [appgw-diagnostics/readme.md](appgw-diagnostics/readme.md).
