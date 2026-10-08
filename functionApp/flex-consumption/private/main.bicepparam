@@ -1,14 +1,18 @@
 using 'main.bicep'
 
-param customerName = ''
-param projectName = ''
-param environmentType = ''
-param location = ''
-param locationShortCode = ''
-param deployedBy = ''
+param customerName = 'bwc'
+param projectName = 'func'
+param environmentType = 'dev'
+param location = 'westeurope'
+param locationShortCode = 'weu'
+param deployedBy = 'labadmin@builtwthicaffeine.cloud'
 
 // Networking Mode: true = standalone (create new VNet+DNS), false = use existing spoke VNet + shared hub DNS
-param enableCreateVirtualNetwork = false
+param enableCreateVirtualNetwork = true
+
+param networkAddressPrefix = '10.0.0.0/24'
+param sharedSubnetPrefix = '10.0.0.0/27'
+param outboundSubnetPrefix = '10.0.0.32/27'
 
 //
 // Existing Spoke VNet (subnets used for PE + outbound VNet integration)

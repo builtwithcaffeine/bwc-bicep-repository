@@ -3,30 +3,45 @@ targetScope = 'subscription'
 //
 // Default Values
 
-@description('Azure Location')
+@description('Azure Location where the application resources are deployed.')
+@minLength(1)
+@maxLength(64)
 param location string
 
-@description('Azure Location Short Code')
+@description('Short code for the Azure location, used in resource names.')
+@minLength(2)
+@maxLength(3)
 param locationShortCode string
 
-@description('Customer Name')
+@description('Customer identifier used in resource names.')
+@minLength(1)
+@maxLength(6)
 param customerName string
 
-@description('Project Name')
-param projectName string
+@description('Project identifier used in resource names.')
+@minLength(1)
+@maxLength(6)
+param projectName string = 'func'
 
 @description('Environment Type')
 @allowed(['dev', 'acc', 'prd'])
 param environmentType string
 
-@description('User Deployment Name')
+@description('Identity or pipeline name that initiated the deployment.')
+@minLength(1)
+@maxLength(128)
 param deployedBy string
+
+@description('Deployment date in yyyy-MM-dd format. Defaults to the current UTC date and can be overridden by the deployment pipeline.')
+@minLength(10)
+@maxLength(10)
+param deployedDate string = utcNow('yyyy-MM-dd')
 
 @description('Azure Metadata Tags')
 param tags object = {
   environmentType: environmentType
   deployedBy: deployedBy
-  deployedDate: utcNow('yyyy-MM-dd')
+  deployedDate: deployedDate
 }
 
 //
@@ -35,33 +50,45 @@ param tags object = {
 @description('Set to true to create a new VNet, NSG and Private DNS Zones. Set to false to reference an existing spoke VNet + shared hub Private DNS Zones.')
 param enableCreateVirtualNetwork bool
 
+@description('Address prefix for the virtual network. Required when enableCreateVirtualNetwork is true.')
+@minLength(1)
+param networkAddressPrefix string
+
+@description('Address prefix for the shared subnet. Required when enableCreateVirtualNetwork is true.')
+@minLength(1)
+param sharedSubnetPrefix string
+
+@description('Address prefix for the outbound subnet. Required when enableCreateVirtualNetwork is true.')
+@minLength(1)
+param outboundSubnetPrefix string
+
 //
 // Existing Spoke VNet Parameters (subnets used for private endpoints + outbound VNet integration)
 // Required when enableCreateVirtualNetwork = false
 
-@description('Subscription ID of the existing spoke VNet that hosts the PE + outbound subnets.')
+@description('Subscription ID of the existing spoke VNet that hosts the PE + outbound subnets. Required when enableCreateVirtualNetwork is false.')
 param existingVirtualNetworkSubscriptionId string = ''
 
-@description('Resource Group name containing the existing spoke VNet.')
+@description('Resource Group name containing the existing spoke VNet. Required when enableCreateVirtualNetwork is false.')
 param existingVirtualNetworkResourceGroupName string = ''
 
-@description('Name of the existing spoke VNet.')
+@description('Name of the existing spoke VNet. Required when enableCreateVirtualNetwork is false.')
 param existingVirtualNetworkName string = ''
 
-@description('Name of the existing shared/private-endpoint subnet in the spoke VNet.')
+@description('Name of the existing shared/private-endpoint subnet in the spoke VNet. Required when enableCreateVirtualNetwork is false.')
 param existingSubnetShared string = ''
 
-@description('Name of the existing function app outbound (delegated) subnet in the spoke VNet.')
+@description('Name of the existing function app outbound (delegated) subnet in the spoke VNet. Required when enableCreateVirtualNetwork is false.')
 param existingSubnetOutbound string = ''
 
 //
 // Shared Hub Private DNS Zone Parameters (typically a separate central subscription)
 // Required when enableCreateVirtualNetwork = false
 
-@description('Subscription ID containing the shared hub Private DNS Zones.')
+@description('Subscription ID containing the shared hub Private DNS Zones. Required when enableCreateVirtualNetwork is false.')
 param sharedHubSubscriptionId string = ''
 
-@description('Resource Group containing the shared hub Private DNS Zones.')
+@description('Resource Group containing the shared hub Private DNS Zones. Required when enableCreateVirtualNetwork is false.')
 param sharedHubPrivateDnsZoneResourceGroupName string = ''
 
 // Private DNS Zone names for private endpoints
@@ -76,7 +103,7 @@ var privateDnsZoneArray = [
 //
 // Resource Names
 
-var resourceGroupName = 'rg-${customerName}-${projectName}-${environmentType}-${locationShortCode}'
+var resourceGroupName = 'rg-x-${customerName}-${projectName}-${environmentType}-${locationShortCode}'
 var virtualNetworkName = 'vnet-${customerName}-${projectName}-${environmentType}-${locationShortCode}'
 var networkSecurityGroupName = 'nsg-${customerName}-${projectName}-${environmentType}-${locationShortCode}'
 var userManagedIdentityName = 'id-${customerName}-${projectName}-${environmentType}-${locationShortCode}'
@@ -90,17 +117,17 @@ var functionAppName = 'func-${customerName}-${projectName}-${environmentType}-${
 //
 // Existing Hub Resource References (used when enableCreateVirtualNetwork = false)
 
-resource existingSpokeVirtualNetwork 'Microsoft.Network/virtualNetworks@2024-05-01' existing = if (!enableCreateVirtualNetwork) {
+resource existingSpokeVirtualNetwork 'Microsoft.Network/virtualNetworks@2025-09-01' existing = if (!enableCreateVirtualNetwork) {
   name: existingVirtualNetworkName
   scope: resourceGroup(existingVirtualNetworkSubscriptionId, existingVirtualNetworkResourceGroupName)
 }
 
-resource existingSpokeSubnetShared 'Microsoft.Network/virtualNetworks/subnets@2024-05-01' existing = if (!enableCreateVirtualNetwork) {
+resource existingSpokeSubnetShared 'Microsoft.Network/virtualNetworks/subnets@2025-09-01' existing = if (!enableCreateVirtualNetwork) {
   name: existingSubnetShared
   parent: existingSpokeVirtualNetwork
 }
 
-resource existingSpokeSubnetOutbound 'Microsoft.Network/virtualNetworks/subnets@2024-05-01' existing = if (!enableCreateVirtualNetwork) {
+resource existingSpokeSubnetOutbound 'Microsoft.Network/virtualNetworks/subnets@2025-09-01' existing = if (!enableCreateVirtualNetwork) {
   name: existingSubnetOutbound
   parent: existingSpokeVirtualNetwork
 }
@@ -158,7 +185,7 @@ var privateDnsZoneWebsitesId = enableCreateVirtualNetwork
 //
 // Azure Verified Modules - No Hard Coded Values below this line!
 
-module createResourceGroup 'br/public:avm/res/resources/resource-group:0.4.3' = {
+module createResourceGroup 'br/public:avm/res/resources/resource-group:0.4.4' = {
   name: 'create-resource-group'
   params: {
     name: resourceGroupName
@@ -181,26 +208,31 @@ module createNetworkSecurityGroup 'br/public:avm/res/network/network-security-gr
   ]
 }
 
-module createVirtualNetwork 'br/public:avm/res/network/virtual-network:0.8.1' = if (enableCreateVirtualNetwork) {
+module createVirtualNetwork 'br/public:avm/res/network/virtual-network:0.10.2' = if (enableCreateVirtualNetwork) {
   name: 'create-virtual-network'
   scope: resourceGroup(resourceGroupName)
   params: {
     name: virtualNetworkName
     location: location
     addressPrefixes: [
-      '10.0.0.0/24'
+      networkAddressPrefix
     ]
     subnets: [
       {
         name: 'snet-shared'
-        addressPrefix: '10.0.0.0/27'
+        addressPrefix: sharedSubnetPrefix
         networkSecurityGroupResourceId: createNetworkSecurityGroup.outputs.resourceId
       }
       {
         name: 'snet-funcapp-outbound'
-        addressPrefix: '10.0.0.32/27'
+        addressPrefix: outboundSubnetPrefix
         networkSecurityGroupResourceId: createNetworkSecurityGroup.outputs.resourceId
         delegation: 'Microsoft.App/environments'
+      }
+    ]
+    diagnosticSettings: [
+      {
+        workspaceResourceId: createLogAnalyticsWorkspace.outputs.resourceId
       }
     ]
   }
@@ -230,7 +262,7 @@ module createPrivateDnsZoneArray 'br/public:avm/res/network/private-dns-zone:0.8
   }
 ]
 
-module createUserManagedIdentity 'br/public:avm/res/managed-identity/user-assigned-identity:0.5.0' = {
+module createUserManagedIdentity 'br/public:avm/res/managed-identity/user-assigned-identity:0.6.0' = {
   name: 'create-user-managed-identity'
   scope: resourceGroup(resourceGroupName)
   params: {
@@ -243,7 +275,7 @@ module createUserManagedIdentity 'br/public:avm/res/managed-identity/user-assign
   ]
 }
 
-module createKeyVault 'br/public:avm/res/key-vault/vault:0.13.3' = {
+module createKeyVault 'br/public:avm/res/key-vault/vault:0.14.2' = {
   name: 'create-key-vault'
   scope: resourceGroup(resourceGroupName)
   params: {
@@ -273,6 +305,11 @@ module createKeyVault 'br/public:avm/res/key-vault/vault:0.13.3' = {
         principalId: createUserManagedIdentity.outputs.principalId
       }
     ]
+    diagnosticSettings: [
+      {
+        workspaceResourceId: createLogAnalyticsWorkspace.outputs.resourceId
+      }
+    ]
     tags: tags
   }
   dependsOn: [
@@ -280,7 +317,7 @@ module createKeyVault 'br/public:avm/res/key-vault/vault:0.13.3' = {
   ]
 }
 
-module createStorageAccount 'br/public:avm/res/storage/storage-account:0.32.0' = {
+module createStorageAccount 'br/public:avm/res/storage/storage-account:0.33.1' = {
   name: 'create-storage-account'
   scope: resourceGroup(resourceGroupName)
   params: {
@@ -291,6 +328,7 @@ module createStorageAccount 'br/public:avm/res/storage/storage-account:0.32.0' =
     allowSharedKeyAccess: false
     allowBlobPublicAccess: false
     defaultToOAuthAuthentication: true
+    minimumTlsVersion: 'TLS1_2'
     roleAssignments: [
       {
         roleDefinitionIdOrName: 'Storage Blob Data Contributor'
@@ -359,6 +397,11 @@ module createStorageAccount 'br/public:avm/res/storage/storage-account:0.32.0' =
         subnetResourceId: subnetSharedResourceId
       }
     ]
+    diagnosticSettings: [
+      {
+        workspaceResourceId: createLogAnalyticsWorkspace.outputs.resourceId
+      }
+    ]
     tags: tags
   }
   dependsOn: [
@@ -366,7 +409,7 @@ module createStorageAccount 'br/public:avm/res/storage/storage-account:0.32.0' =
   ]
 }
 
-module createLogAnalyticsWorkspace 'br/public:avm/res/operational-insights/workspace:0.15.0' = {
+module createLogAnalyticsWorkspace 'br/public:avm/res/operational-insights/workspace:0.16.1' = {
   name: 'create-log-analytics-workspace'
   scope: resourceGroup(resourceGroupName)
   params: {
@@ -381,7 +424,7 @@ module createLogAnalyticsWorkspace 'br/public:avm/res/operational-insights/works
   ]
 }
 
-module createApplicationInsights 'br/public:avm/res/insights/component:0.7.1' = {
+module createApplicationInsights 'br/public:avm/res/insights/component:0.8.0' = {
   name: 'create-application-insights'
   scope: resourceGroup(resourceGroupName)
   params: {
@@ -394,6 +437,11 @@ module createApplicationInsights 'br/public:avm/res/insights/component:0.7.1' = 
         roleDefinitionIdOrName: 'Monitoring Metrics Publisher'
         principalType: 'ServicePrincipal'
         principalId: createUserManagedIdentity.outputs.principalId
+      }
+    ]
+    diagnosticSettings: [
+      {
+        workspaceResourceId: createLogAnalyticsWorkspace.outputs.resourceId
       }
     ]
     tags: tags
@@ -419,7 +467,7 @@ module createAppServicePlan 'br/public:avm/res/web/serverfarm:0.7.0' = {
   ]
 }
 
-module createFunctionApp 'br/public:avm/res/web/site:0.22.0' = {
+module createFunctionApp 'br/public:avm/res/web/site:0.24.0' = {
   name: 'create-function-app'
   scope: resourceGroup(resourceGroupName)
   params: {
@@ -457,7 +505,7 @@ module createFunctionApp 'br/public:avm/res/web/site:0.22.0' = {
     functionAppConfig: {
       runtime: {
         name: 'powershell'
-        version: '7.4'
+        version: '7.6'
       }
       deployment: {
         storage: {
@@ -510,6 +558,11 @@ module createFunctionApp 'br/public:avm/res/web/site:0.22.0' = {
           ]
         }
         subnetResourceId: subnetSharedResourceId
+      }
+    ]
+    diagnosticSettings: [
+      {
+        workspaceResourceId: createLogAnalyticsWorkspace.outputs.resourceId
       }
     ]
     tags: tags
