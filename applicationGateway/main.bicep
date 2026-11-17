@@ -329,7 +329,7 @@ module createUserManagedIdentity 'br/public:avm/res/managed-identity/user-assign
   ]
 }
 
-module createStorageAccount 'br/public:avm/res/storage/storage-account:0.33.0' = if (enableAgwStorageStatus) {
+module createStorageAccount 'br/public:avm/res/storage/storage-account:0.33.1' = if (enableAgwStorageStatus) {
   name: 'create-storage-account-${locationShortCode}'
   scope: resourceGroup(resourceGroupName)
   params: {
@@ -374,7 +374,7 @@ module createLogAnalyticsWorkspace 'br/public:avm/res/operational-insights/works
   ]
 }
 
-module createNetworkSecurityGroup 'br/public:avm/res/network/network-security-group:0.5.3' = {
+module createNetworkSecurityGroup 'br/public:avm/res/network/network-security-group:0.5.4' = {
   name: 'create-network-security-group-${locationShortCode}'
   scope: resourceGroup(resourceGroupName)
   params: {
@@ -495,41 +495,50 @@ module createApplicationGateway 'br/public:avm/res/network/application-gateway:0
       {
         name: applicationGatewayDefaultBackendAddressPoolName
         properties: {
-          backendAddresses: hasDefaultBackend ? [
-            {
-              fqdn: defaultBackendFqdn
-            }
-          ] : []
+          backendAddresses: hasDefaultBackend
+            ? [
+                {
+                  fqdn: defaultBackendFqdn
+                }
+              ]
+            : []
         }
       }
     ]
-    probes: hasDefaultBackend ? [
-      {
-        name: applicationGatewayDefaultHealthProbeName
-        properties: {
-          protocol: defaultBackendProtocol
-          host: defaultBackendFqdn
-          path: defaultHealthProbePath
-          interval: defaultHealthProbeIntervalInSeconds
-          timeout: defaultHealthProbeTimeoutInSeconds
-          unhealthyThreshold: defaultHealthProbeUnhealthyThreshold
-        }
-      }
-    ] : []
+    probes: hasDefaultBackend
+      ? [
+          {
+            name: applicationGatewayDefaultHealthProbeName
+            properties: {
+              protocol: defaultBackendProtocol
+              host: defaultBackendFqdn
+              path: defaultHealthProbePath
+              interval: defaultHealthProbeIntervalInSeconds
+              timeout: defaultHealthProbeTimeoutInSeconds
+              unhealthyThreshold: defaultHealthProbeUnhealthyThreshold
+            }
+          }
+        ]
+      : []
     backendHttpSettingsCollection: [
       {
         name: applicationGatewayDefaultBackendHttpSettingsName
-        properties: union({
-          cookieBasedAffinity: 'Disabled'
-          port: defaultBackendPort
-          protocol: defaultBackendProtocol
-        }, hasDefaultBackend ? {
-          hostName: defaultBackendFqdn
-          pickHostNameFromBackendAddress: false
-          probe: {
-            id: '${applicationGatewayResourceIdPath}/probes/${applicationGatewayDefaultHealthProbeName}'
-          }
-        } : {})
+        properties: union(
+          {
+            cookieBasedAffinity: 'Disabled'
+            port: defaultBackendPort
+            protocol: defaultBackendProtocol
+          },
+          hasDefaultBackend
+            ? {
+                hostName: defaultBackendFqdn
+                pickHostNameFromBackendAddress: false
+                probe: {
+                  id: '${applicationGatewayResourceIdPath}/probes/${applicationGatewayDefaultHealthProbeName}'
+                }
+              }
+            : {}
+        )
       }
     ]
     httpListeners: [
