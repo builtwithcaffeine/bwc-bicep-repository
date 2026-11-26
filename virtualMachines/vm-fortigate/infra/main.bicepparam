@@ -4,6 +4,7 @@ param customerName = 'bwc'
 param environment = 'dev'
 param location = 'uksouth'
 param locationShortCode = 'uks'
+param deployedBy = 'ladadmin@builtwithcaffeine.cloud'
 
 // Virtual Machine - Local User Account
 param adminUser = 'bwccloudops'
